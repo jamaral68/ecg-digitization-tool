@@ -71,7 +71,7 @@ def separate_components(image):
 # Helper function to display segmented ECG picture
 def display_segments(name, item, axis='off'):
     plt.figure(figsize=(12, 9))
-    plt.imshow(item)
+    plt.imshow(item, cmap="magma")
     plt.title(name)
     plt.axis(axis)
     plt.subplots_adjust(wspace=.05, left=.01, bottom=.01, right=.99, top=.9)
@@ -85,8 +85,8 @@ def ocr(image):
 
 
 def main():
-    # image_name = 'images/test4.jpeg'  # select image
-    image_name = 'new/6/22 陆金明 ？/IMAGE_000018.jpg'
+    image_name = 'images/test3.jpg'  # select image
+    #image_name = 'new/6/22 陆金明 ？/IMAGE_000018.jpg'
 
     image = cv.imread(image_name, flags=cv.IMREAD_GRAYSCALE)  # read the image as GS
 
@@ -102,8 +102,35 @@ def main():
     cropped_image = crop_image(image, 200, -20, 0, 0)
     display_image(cropped_image, 'Cropped Image')
 
+
+    # Denoise
+    cropped_image = cv.fastNlMeansDenoising(cropped_image, None, 20, 7, 21) 
+
+
+
+    ## template Matching 
+    template = cv.imread('images/pulse.jpg', cv.IMREAD_GRAYSCALE)
+    w, h = template.shape[::-1]
+
+    res = cv.matchTemplate(cropped_image,template,cv.TM_CCOEFF_NORMED)
+    threshold = 0.75
+    loc = np.where( res >= threshold)
+    for pt in zip(*loc[::-1]):
+        cv.rectangle(cropped_image, pt, (pt[0] + w, pt[1] + h), (0,0,255), 2)
+ 
+    cv.imwrite('res.png',cropped_image)
+    display_image(cropped_image, 'Match Template Image')
+
+    cropped_image = cv.bitwise_not(cropped_image)
+
     # use thresholding to transform the image into a binary one
-    ret, binary_image = cv.threshold(cropped_image, 127, 255, cv.THRESH_BINARY)
+    ret, binary_image = cv.threshold(cropped_image, 127, 255, cv.THRESH_BINARY) # change to Otsu
+    
+    # kernel = np.ones((3, 3), np.uint8)
+    # binary_image = cv.dilate(binary_image, kernel, iterations=1)
+    # binary_image = cv.erode(binary_image, kernel, iterations=1)
+    
+    #binary_image -= cv.bitwise_not(binary_image)
     display_image(binary_image, 'Binary Image')
     print(binary_image.shape)
 
@@ -124,11 +151,13 @@ def main():
     curve_upper_bound = []
     fig = plt.figure(figsize=(12, 8))
     plt.title('Separated Curves')
-    columns = 1
-    rows = 5
+    columns = 2     # change depending on the ecg
+    rows = 6        #
+
     for i in range(1, np.amax(labeled_image) + 1):
         sl = ndimage.find_objects(labeled_image == i)
         img = binary_image[sl[0]]
+        #display_image(img,str(i) )
         if img.shape[1] > 200:
             curve_indices.append(i)
             curve_widths.append(img.shape[0])
@@ -149,16 +178,17 @@ def main():
 
     fig = plt.figure(figsize=(12, 8))
     plt.title("Extracted 'S'")
-    columns = 5
-    rows = 2
+    # columns = 2
+    # rows = 5
 
     # for recording the baselines of the curves
     baselines = []
     for i in range(1, np.amax(labeled_image) + 1):
         sl = ndimage.find_objects(labeled_image == i)
         img = binary_image[sl[0]]
+        #display_image(img,str(i) )
         if 10 < img.shape[0] < 12 and 6 < img.shape[1] < 8:
-            if (len(baselines) == 5):
+            if (len(baselines) == 5): # number of rows
                 break
             baselines.append(sl[0][0].stop)
             print("'S' {} line range = [{}, {}].".format(len(baselines), sl[0][0].start, sl[0][0].stop))
@@ -174,14 +204,15 @@ def main():
 
     fig = plt.figure(figsize=(12, 8))
     plt.title("Trimmed Curves")
-    columns = 1
-    rows = 5
+    # columns = 1
+    # rows = 5
     # make sure the curves have the same length (same as the shortest)
     final_images = []
     min_length = min(curve_lengths)
     for i in range(len(curve_indices)):
         sl = ndimage.find_objects(labeled_image == curve_indices[i])
         img = binary_image[sl[0]]
+        display_image(img,str(i) )
         # print(img.shape)
         if img.shape[1] > min_length:
             diff = img.shape[1] - min_length
@@ -193,8 +224,8 @@ def main():
 
     fig = plt.figure(figsize=(12, 8))
     plt.title('Scattered Dots')
-    columns = 1
-    rows = 5
+    # columns = 1
+    # rows = 5
 
     coords = []
     for i in range(len(curve_indices)):
@@ -225,10 +256,11 @@ def main():
             g = 127 + actual_coord - axis
             gs_img.append(g)
         bigger_pic.append(gs_img)
-    array = np.array(bigger_pic, dtype=np.uint8)
-    newimg = Image.fromarray(array)
-    newimg.show()
-    newimg.save('result_image.png')
+    if len(baselines)!=0:
+        array = np.array(bigger_pic, dtype=np.uint8)
+        newimg = Image.fromarray(array)
+        newimg.show()
+        newimg.save('result_image.png')
 
 if __name__ == '__main__':
     main()
