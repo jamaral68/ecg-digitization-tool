@@ -2,29 +2,39 @@ import sys
 import scipy
 import cv2 as cv
 import numpy as np
+import pandas as pd
 from scipy import ndimage
 from matplotlib import pyplot as plt
 from PIL import Image
 import skimage as ski
 import pytesseract
-from edt_utils import get_rectangular_contours, py_blockproc, display_segments, detect_ref_pulse
+from edt_utils import get_rectangular_contours, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
 from edt_utils import process_line
 from scipy.signal import find_peaks
 import operator
 
-BORDER_GAP = 15 # gap around the border
+BORDER_GAP = 2 # gap around the border
 layout = (3,4)
 
 # indicate if  there is a pulse
 # pulse = 0 - pulse in all lines
 # pulse = line_list - pulse present only on the the line llist
 #
-pulse = -1
-rhythm = 4
-verbose = 2
+pulse = -1   
+rhythm = 4 # which line has the rhythum
+verbose = 0
+mmpsec = 25 # 25 mm/seg
+mmpmv = 10 # 10 mm/mV
+pulse_width_mm = 5 # pulse width in mm
+pulse_height_mm =10  # pulse height in mm
+pulse_per_sec = pulse_width_mm/mmpsec
+pulse_per_mv= pulse_height_mm/mmpmv
+sample_frequency = 500
+time_lead = 2.5 # duratiom of the segment in seconds
+num_sampling_points = time_lead/(1/sample_frequency)
 
 # the names dependending on the layout
-if layout[1]== 4:
+if layout[1]== 4 and layout[0]==3:
     lt_leads = [ ['I', 'aVR','V1','V4'],
                      ['II','aVL','V2','V5'],
                      ['III','aVF', 'V3','V6'],
@@ -65,10 +75,16 @@ else:
 
 
 config_dict ={}
-config_dict['layout']=layout
-config_dict['rhythm'] = rhythm
-config_dict['verbose'] = verbose
-config_dict['pulse'] = pulse
+config_dict['layout']=layout   # tuple with the layout
+config_dict['rhythm'] = rhythm # which row has the rhythm signal
+config_dict['verbose'] = verbose # 
+config_dict['pulse'] = pulse # which lines have pulse
+config_dict['pulse_width_mm']  = pulse_width_mm
+config_dict['pulse_height_mm'] = pulse_height_mm
+config_dict['pulse_per_mv']= pulse_per_mv
+config_dict['pulse_per_sec']= pulse_per_sec
+config_dict['num_sampling_points']= num_sampling_points
+
 
 
 
@@ -140,7 +156,7 @@ if verbose > 1:
     plt.show()
 
 
-template_name = 'images/pul2.png'
+template_name = 'images/pul.png'
 template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
 # sanity check
 if image is None:
@@ -177,21 +193,24 @@ if verbose > 0 :
 # Calculate the distance between selected peaks
 
 ordered_hp_index = sorted(highest_peak_index[-(layout[0]+1):])
-print(ordered_hp_index)
+
 
 peak_dist = [np.abs(t - s) for s, t in zip(ordered_hp_index, ordered_hp_index[1:])]
-max_dist = max(peak_dist)//2 #TODO: add as input
+max_dist = max(peak_dist)*7//10 #TODO: add as input
 
 # Cut the image according to the number of rows in the layout
 # slices_x is a list of tuples
 
 slices_x = [(max(0, s-max_dist), min(foreground.shape[0],s+max_dist),None) for s in ordered_hp_index]
+
 slices_y = [(0, foreground.shape[1], None) for s in ordered_hp_index]
 
 if verbose > 1 :
     print("INFO: slices: {}". format(slices_x))
 
-# Create a black image to check the extraction
+# Create a list to store the processed lines
+
+proc_line_list =[]
 
 h, w = foreground.shape
 blank_image =  np.zeros(shape=(h, w), dtype=np.uint8)
@@ -211,6 +230,7 @@ for i, slx in enumerate(slices_x):
 
     labeled_line, nb = ndimage.label(line, structure=structure)
 
+
     if verbose > 1:
         print("INFO: Number of segments {} on line {}.".format(nb, i))
         display_segments('Labeled line', labeled_line)
@@ -219,28 +239,33 @@ for i, slx in enumerate(slices_x):
     if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
         line_signal = np.where(labeled_line==0,0,255)
 
-        plt.imshow(line_signal, cmap = "gray")
+        # plt.imshow(line_signal, cmap = "gray")
 
         #Try to detect the pulse
         line_copy = line_signal.copy()
         line_copy = line_copy.astype("uint8")
 
+
         new_template = np.where(new_template==0,255,0) 
         new_template = new_template.astype("uint8")
         
-        plt.imshow(new_template, cmap = "gray")
-        plt.show()
+        if verbose > 2:
+            plt.imshow(new_template, cmap = "gray")
+            plt.show()
 
         # Pulse detection by template
         detected,x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
 
         if verbose > 1:
-            plt.imshow(line_copy[x:x+hpulse+1,y:y+wpulse+1], cmap ="gray")
+            if detected:
+                print('INFO: pulse detected by template in line {}'.format(i))
+                plt.imshow(line_copy[x:x+hpulse+1,y:y+wpulse+1], cmap ="gray")
+            else:
+                print('INFO: pulse NOT detected by template in line {}'.format(i))
 
 
     else:
         print("INFO: line {} has no pulse to detect".format(i))
-        #TODO: add info in the config_dict
         wpulse = np.nan
         hpulse = np.nan
 
@@ -249,10 +274,28 @@ for i, slx in enumerate(slices_x):
     config_dict['hpulse']= hpulse
 
     # Process line
-    line_dict = process_line(i,labeled_line,offset,lt_leads[0], config_dict, config_dict['verbose'])
+    line_dict = process_line(i,labeled_line,offset,lt_leads[i], config_dict, config_dict['verbose'])
+    proc_line_list.append(line_dict)
+
+
+#Print to check if everything is OK
+
+
+for i, line in enumerate(proc_line_list): 
+    print("INFO: processing")
+    print_line_dict(line)
+
+#TODO remove the rhythm form the list of lines
+proc_line_list.pop(rhythm-1)
     
-    
-   
+# convert do a dataframe
+ecg_df= segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv,num_sampling_points)
+ecg_df.to_csv()
+
+#
+ecg_df.plot(subplots=True, figsize=(12, 12)); plt.legend(loc='best');plt.show()
+
+print("End of Program")
 
 
     
