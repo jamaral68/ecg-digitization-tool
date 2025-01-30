@@ -707,7 +707,7 @@ def process_line(line_number, labeled_line,offset,line_leads,config_dict, verbos
 
                      if is_nan(config_dict['wpulse']):
                           print("INFO:No check with template is possible")
-                          print("INFO: pulse width: {} and pulse height{}".format(wpulse, hpulse))
+                          print("INFO: pulse width: {} and pulse height {}".format(wpulse, hpulse))
                      else:
                           if wpulse-10 <= config_dict['wpulse'] and wpulse+10 >=config_dict['wpulse']:
                                print("INFO: pulse width checked {} and {}".format(wpulse, config_dict['wpulse']))
