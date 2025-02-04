@@ -11,6 +11,8 @@ import skimage as ski
 import pytesseract
 import pprint
 import math
+from itertools import groupby
+import ss
 
 def is_nan(value):
     try:
@@ -63,7 +65,7 @@ def get_values_from_img(roi):
      xs = []
      ys = []
      for j in range(length):
-         for k in range(width-1):
+         for k in range(width-1, 0, -1): # try of fix the letter in the signal
              if roi[k][j] == 255:
                 xs.append(j)
                 ys.append(width- k)
@@ -107,12 +109,14 @@ def convert_to_secmv(xs,ys,wp, hp,ws, baseline, pulse_per_sec,pulse_per_mv):
 
      return xsec, ymv
 
-def detect_ref_pulse(roi, template, threshold=0.6, verbose=2):
+
+
+def detect_ref_pulse(roi, template,location = 'right', threshold=0.6, verbose=2):
     ''' 
 
     '''
-   
-    w, h = template.shape[::-1]
+    
+  
     if roi.shape[0] <= template.shape[0] or roi.shape[1]<= template.shape[1]:
                
            #template is bigger then roi. Can not perform matchTemplate
@@ -121,10 +125,34 @@ def detect_ref_pulse(roi, template, threshold=0.6, verbose=2):
             empty_array = np.array(empty_list)
             loc = (empty_array,empty_array )
     else:
-            res = cv.matchTemplate(roi,template,cv.TM_CCORR_NORMED) # try tofind the pulse using a template match
+            
+
+
+            method = cv.TM_CCORR_NORMED
+            res = cv.matchTemplate(roi,template,method) # try tofind the pulse using a template match
             # Getting the max
-            x, y = np.unravel_index(np.argmax(res), res.shape)
-            print("INFO: max correlation is {} in x = {} and y = {}.".format(np.max(res),x,y))
+            # x, y = np.unravel_index(np.argmax(res), res.shape)
+            # print("INFO: max correlation is {} in x = {} and y = {}.".format(np.max(res),x,y))
+
+            min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+ 
+            # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
+            if method in [cv.TM_SQDIFF, cv.TM_SQDIFF_NORMED]:
+                 top_left = min_loc
+                 x = top_left[1]
+                 y = top_left[0]
+                 similarity_value = min_val
+                 print("INFO: min similarity value is {} in x = {} and y = {}.".format(min_val,x,y))
+            else:
+                 top_left = max_loc
+                 x = top_left[1]
+                 y = top_left[0]
+                 similarity_value = max_val
+                 print("INFO: max similarity value is {} in x = {} and y = {}.".format(max_val,x,y))
+            #bottom_right = (top_left[0] + w, top_left[1] + h)
+
+            x = top_left[1]
+            y = top_left[0]
             
             template_width, template_height = template.shape
             if verbose > 1:
@@ -156,30 +184,17 @@ def detect_ref_pulse(roi, template, threshold=0.6, verbose=2):
         # plt.imshow(extracted_pulse)
         # plt.show()
         _,_,xpulse,ypulse= get_values_from_img(extracted_pulse)
-        wpulse,hpulse = measure_extract_pulse(xpulse,ypulse)
-       
-             
-        if (y > roi.shape[1]//2): 
-                     #pulse detected on the right
-                     print("INFO: Pulse detected on the right")
-                     #roi = roi[:,:-ppts_min]
-                     #TODO: return just the position of the pulse
-        else:
-                    #pulse detected on the left
-                    print("INFO: Pulse detected on the left")
-                    #roi = roi[:,ppts_max+w+1:]
-                    #TODO retuern just position of the pulse
-              
-              
+        wpulse,hpulse = measure_extract_pulse(xpulse,ypulse)              
               
     else:
+              # There was a pulse to be detected but the detection failed
               # No pulse detected or the roi has no pulse
               detected = False
               #curve_scales.append((np.nan,np.nan))
               wpulse = np.nan
               hpulse = np.nan
-    
-    return detected,x,y, wpulse, hpulse, 
+              
+    return detected,location, similarity_value, x,y, wpulse, hpulse, 
 
 def print_segment_list(segment_list):
      for seg in segment_list:
@@ -350,11 +365,6 @@ def process_line(line_number, labeled_line,offset,line_leads,config_dict, verbos
                 baseline = np.argmax(np.std(seg, axis =1))
                 segment_dict ['baseline']= baseline
 
-                # xsec,ymv= convert_to_secmv(xs,ys,line_dict['wpulse'], line_dict['hpulse'],ws, baseline, config_dict['pulse_per_sec'],config_dict['pulse_per_mv'])
-                # segment_dict ['xseg']=xsec 
-                # segment_dict ['yseg']=ymv
-
-                line_dict['curves'].append(segment_dict)
 
                 print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict ['lseg']))
 
@@ -670,6 +680,19 @@ def process_line(line_number, labeled_line,offset,line_leads,config_dict, verbos
             segment_dict ['lseg']=ls 
             segment_dict ['xseg']=xs 
             segment_dict ['yseg']=ys
+            
+            # seen = []
+            # result=[]
+
+          
+            
+            # for i, t in enumerate(zip(xs,ys)):
+             
+            #     if t[0] not in seen:
+            #         seen.append(t[0])
+            #         result.append(t)
+            #     else:
+            #         print("DEBUG: repetead x = {}  t ={}".format(t[0],t))
 
             baseline = np.argmax(np.std(seg, axis =1))
             segment_dict ['baseline']= baseline

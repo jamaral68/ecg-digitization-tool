@@ -9,7 +9,8 @@ from PIL import Image
 import skimage as ski
 import pytesseract
 from edt_utils import get_rectangular_contours, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
-from edt_utils import process_line
+from ss import pattern_match
+from edt_utils import process_line,get_values_from_img,measure_extract_pulse 
 from scipy.signal import find_peaks
 import operator
 
@@ -80,6 +81,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
     config_dict['rhythm'] = rhythm # which row has the rhythm signal
     config_dict['verbose'] = verbose # 
     config_dict['pulse'] = pulse # which lines have pulse
+    
     config_dict['pulse_width_mm']  = pulse_width_mm
     config_dict['pulse_height_mm'] = pulse_height_mm
     config_dict['pulse_per_mv']= pulse_per_mv
@@ -252,12 +254,45 @@ def ecg_to_csv(image_name, template_name, csv_name):
                 plt.imshow(new_template, cmap = "gray")
                 plt.show()
 
+            template_width, template_height = template.shape
+            line_copy_width, line_copy_height = line_copy.shape
+            _,_,xt,yt = get_values_from_img(new_template)
+            wt, ht = measure_extract_pulse(xt,yt, verbose=0)
+            config_dict['hpulse']=ht #default values
+            config_dict['wpulse']=wt
+
+            # pattern matching 
+            # method = 'euclidean'
+            # _,_,_,line_signal = get_values_from_img(line_copy)
+            # _,_,_,template_signal = get_values_from_img(new_template)
+
+            # #put the same baseline
+            # baseline = np.argmax(np.std(line_copy, axis =1))
+
+
+            # y_best = pattern_match(np.array(line_signal), np.array(template_signal+baseline),method)
+            # print('DEBUG: pulse detected by template in line {} in {}'.format(i, y_best))
+
+
             # Pulse detection by template
-            detected,x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
+            detected,location,  similarity_value, x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
+            print("INFO: line {}: best similarity value = {} in {}". format(i,similarity_value,y))
+
+            # if detected :
+            #     if  location =='right':
+            #         sliced_labeled_line = labeled_line[:,0:y].copy()
+            #     elif location == 'left':
+            #         sliced_labeled_line = labeled_line[:,y:].copy()
+            #     else:
+            #         sliced_labeled_line = labeled_line.copy()
+
+            
+
+            
 
             if verbose > 1:
                 if detected:
-                    print('INFO: pulse detected by template in line {}'.format(i))
+                    print('INFO: pulse detected by template in line {} in {}'.format(i,y))
                     plt.imshow(line_copy[x:x+hpulse+1,y:y+wpulse+1], cmap ="gray")
                 else:
                     print('INFO: pulse NOT detected by template in line {}'.format(i))
@@ -279,13 +314,13 @@ def ecg_to_csv(image_name, template_name, csv_name):
 
     #Print to check if everything is OK
 
-
     for i, line in enumerate(proc_line_list): 
-        print("INFO: processing")
+        print("INFO: processing line {}".format(i))
         print_line_dict(line)
 
     #TODO remove the rhythm form the list of lines
-    proc_line_list.pop(rhythm-1)
+    if config_dict['rhythm'] != 0:
+        proc_line_list.pop(rhythm-1)
         
     # convert do a dataframe
     ecg_df= segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv,num_sampling_points)
