@@ -85,9 +85,6 @@ def get_values_from_img(roi):
                     dy_dx_list.append(dy_dx)
                     d2y_dx2_list.append(d2y_dx2)
                 tmp = np.argmin(np.abs(d2y_dx2_list))
-                if num != 1: 
-                    print(old_dy_dx, ys[-10:])
-                    print(median_list, dy_dx_list, d2y_dx2_list)
                 old_dy_dx = dy_dx_list[tmp]
                 xs.append(i)
                 ys.append(median_list[tmp])
@@ -97,10 +94,10 @@ def get_values_from_img(roi):
                 median_pixel = np.median(pixel_loc)
                 xs.append(i)
                 ys.append(median_pixel)
-    plt.imshow(roi, cmap="gray")
-    plt.plot(xs, ys, c='r', lw=0.75)
+    #plt.imshow(roi, cmap="gray")
+    #plt.plot(xs, ys, c='r', lw=0.75)
     #plt.axis("off")
-    plt.show()
+    #plt.show()
     return width, length, xs, ys
 
 def measure_extract_pulse(x, y, verbose=0):
