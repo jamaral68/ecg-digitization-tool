@@ -288,6 +288,8 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
     line_dict['curves'] = []
     line_dict['offset_line'] = offset
 
+    display_segments("Labeled Line", labeled_line)
+
     # if verbose > 1:
     #      display_segments("Labeled Line", labeled_line)
 
@@ -663,26 +665,26 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
             if (smallest_ratio) < 1:
                 print("INFO: Garbage {}.".format(ratio))
                 break
-            else:
-                if (config_dict['pulse'] == -1) or (line_number in config_dict['pulse']) :   # Check if the pulse is present
-                     print("INFO: Pulse {}.".format(ratio))
-                     _, _, xpulse, ypulse= get_values_from_img(roi_copy)
-                     wpulse, hpulse = measure_extract_pulse(xpulse, ypulse)
+            # else:
+            #     if (config_dict['pulse'] == -1) or (line_number in config_dict['pulse']) :   # Check if the pulse is present
+            #          print("INFO: Pulse {}.".format(ratio))
+            #          _, _, xpulse, ypulse= get_values_from_img(roi_copy)
+            #          wpulse, hpulse = measure_extract_pulse(xpulse, ypulse)
 
-                    #Check the pulse found
-                     if is_nan(config_dict['wpulse']):
-                          print("INFO:No check with template is possible")
-                          print("INFO: pulse width: {} and pulse height {}".format(wpulse, hpulse))
-                     else:
-                          if wpulse-10 <= config_dict['wpulse'] and wpulse+10 >= config_dict['wpulse']:
-                               print("INFO: pulse width checked {} and {}".format(wpulse, config_dict['wpulse']))
-                          if hpulse-10 <= config_dict['hpulse'] and hpulse+10 >= config_dict['hpulse']:
-                               print("INFO: pulse height checked {} and {}".format(hpulse, config_dict['hpulse']))
-                     line_dict['wpulse'] = wpulse
-                     line_dict['hpulse'] = hpulse
-                else:
-                     #if it is no suppose to have a pulse, then it is garbage
-                     break
+            #         #Check the pulse found
+            #          if is_nan(config_dict['wpulse']):
+            #               print("INFO:No check with template is possible")
+            #               print("INFO: pulse width: {} and pulse height {}".format(wpulse, hpulse))
+            #          else:
+            #               if wpulse-10 <= config_dict['wpulse'] and wpulse+10 >= config_dict['wpulse']:
+            #                    print("INFO: pulse width checked {} and {}".format(wpulse, config_dict['wpulse']))
+            #               if hpulse-10 <= config_dict['hpulse'] and hpulse+10 >= config_dict['hpulse']:
+            #                    print("INFO: pulse height checked {} and {}".format(hpulse, config_dict['hpulse']))
+            #          line_dict['wpulse'] = wpulse
+            #          line_dict['hpulse'] = hpulse
+            #     else:
+            #          #if it is no suppose to have a pulse, then it is garbage
+            #          break
 
 
         if ratio < smallest_ratio:

@@ -34,6 +34,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
     sample_frequency = 500
     time_lead = 2.5 # duratiom of the segment in seconds
     num_sampling_points = time_lead/(1/sample_frequency)
+    location = 'right'
 
     # the names dependending on the layout
     if layout[1]== 4 and layout[0]==3:
@@ -160,14 +161,16 @@ def ecg_to_csv(image_name, template_name, csv_name):
 
     #template_name = 'images/pul.png'
     template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
+
     # sanity check
     if image is None:
         print('Cannot open the template: ' + template_name)
         new_template = None
     else:
         #load template to find the pulse
-        _,new_template = cv.threshold(template,127,255,cv.THRESH_OTSU)
-
+        _, new_template = cv.threshold(template, 127, 255, cv.THRESH_OTSU)
+        new_template = (new_template != 255) * np.uint8(255)
+        
     if verbose > 1:
         plt.imshow(new_template, cmap = "gray")
         plt.show()
@@ -238,28 +241,21 @@ def ecg_to_csv(image_name, template_name, csv_name):
         
         
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
-            line_signal = np.where(labeled_line==0,0,255)
+            line_signal = (labeled_line != 0) * np.uint8(255)
+            #line_signal = np.where(labeled_line == 0, 0, 255)
 
             # plt.imshow(line_signal, cmap = "gray")
 
             #Try to detect the pulse
             line_copy = line_signal.copy()
-            line_copy = line_copy.astype("uint8")
-
-
-            new_template = np.where(new_template==0,255,0) 
-            new_template = new_template.astype("uint8")
-            
-            if verbose > 2:
-                plt.imshow(new_template, cmap = "gray")
-                plt.show()
+            #line_copy = line_copy.astype("uint8")
 
             template_width, template_height = template.shape
             line_copy_width, line_copy_height = line_copy.shape
-            _,_,xt,yt = get_values_from_img(new_template)
-            wt, ht = measure_extract_pulse(xt,yt, verbose=0)
-            config_dict['hpulse']=ht #default values
-            config_dict['wpulse']=wt
+            _, _, xt, yt = get_values_from_img(new_template)
+            wt, ht = measure_extract_pulse(xt, yt, verbose=0)
+            config_dict['hpulse'] = ht #default values
+            config_dict['wpulse'] = wt
 
             # pattern matching 
             # method = 'euclidean'
@@ -278,16 +274,16 @@ def ecg_to_csv(image_name, template_name, csv_name):
             detected,location,  similarity_value, x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
             print("INFO: line {}: best similarity value = {} in {}". format(i,similarity_value,y))
 
-            # if detected :
-            #     if  location =='right':
-            #         sliced_labeled_line = labeled_line[:,0:y].copy()
-            #     elif location == 'left':
-            #         sliced_labeled_line = labeled_line[:,y:].copy()
-            #     else:
-            #         sliced_labeled_line = labeled_line.copy()
+            if detected :
+                if  location =='right':
+                    sliced_labeled_line = labeled_line[:,0:y].copy()
+                elif location == 'left':
+                    sliced_labeled_line = labeled_line[:,y+wpulse:].copy()
+                else:
+                    sliced_labeled_line = labeled_line.copy()
 
             
-
+            
             
 
             if verbose > 1:
@@ -308,7 +304,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
         config_dict['hpulse']= hpulse
 
         # Process line
-        line_dict = process_line(i,labeled_line,offset,lt_leads[i], config_dict, config_dict['verbose'])
+        line_dict = process_line(i,sliced_labeled_line,offset,lt_leads[i], config_dict, config_dict['verbose'])
         proc_line_list.append(line_dict)
 
 
