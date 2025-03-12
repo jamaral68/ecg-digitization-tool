@@ -232,6 +232,7 @@ def detect_ref_pulse(roi, template,location='right', threshold=0.6, verbose=2):
             print("INFO: max similarity value is {} in x = {} and y = {}.".format(max_val,x,y))
         #bottom_right = (top_left[0] + w, top_left[1] + h)
 
+        #TODO check if it is necessary
         x = top_left[1]
         y = top_left[0]
 
@@ -336,7 +337,7 @@ def remove_text(image, confidence_threshold):
 def process_line(line_number, labeled_line, offset, line_leads, config_dict, verbose=0):
     '''
     '''
-    # TODO: Clean this dictonary
+    # TODO: Clean this dictionary
     line_dict ={}
     line_dict['wpulse'] = config_dict['wpulse']
     line_dict['hpulse'] = config_dict['hpulse']
@@ -353,6 +354,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
     segment_length = -np.sort(-c[1:])
     max_label = np.max(u)
 
+
     app_seg_size = labeled_line.shape[1] // config_dict['layout'][1]
     if verbose > 2:
         print("INFO: unique label {}.".format(u))
@@ -368,13 +370,14 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
     for label in larger_segments:
         sl = ndimage.find_objects(labeled_line == label)
         roi = labeled_line[sl[0][0], sl[0][1]] # slice in x and slice in y
-
+        print((roi!=0).sum(), c[label])
+        
         length = roi.shape[1]
         roi_copy = (roi == label) * np.uint8(255) #np.where(roi == label, 255, 0).astype("uint8")
 
         # calculate the ratio between length and approximate segment size
         # to check if teh segmentation concatenate 2 ou more segments
-        ratio = round(length / app_seg_size, 1) # calculate the ratio between length and appromate segment
+        ratio = round(length / app_seg_size, 0) # calculate the ratio between length and appromate segment
 
         if verbose > 1:
             print("INFO: label = {}, length = {} and ratio = {}.".format(label, roi_copy.shape[1], ratio))

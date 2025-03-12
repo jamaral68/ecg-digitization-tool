@@ -22,9 +22,9 @@ def ecg_to_csv(image_name, template_name, csv_name):
     # pulse = 0 - pulse in all lines
     # pulse = line_list - pulse present only on the the line llist
     #
-    pulse = -1   
+    pulse = [0,1,2]  
     rhythm = 4 # which line has the rhythum
-    verbose = 0
+    verbose = 3
     mmpsec = 25 # 25 mm/seg
     mmpmv = 10 # 10 mm/mV
     pulse_width_mm = 5 # pulse width in mm
@@ -104,19 +104,23 @@ def ecg_to_csv(image_name, template_name, csv_name):
         print("INFO: Image Shape {}.".format(image.shape))
 
 
-    #Filter color to remove the grid
+    img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
 
+    #Filter color to remove the grid
+    
     lower=(0,0,0) # black color
-    upper=(100,100,100) # dark gray
-    mask = cv.inRange(image, lower, upper)
-    result = image.copy()
+    upper=(179,255,220) # dark gray
+    mask = cv.inRange(img_hsv, lower, upper)
+    result = img_hsv.copy()
     result[mask!=255] = (255, 255, 255) # if it is not very dark set it to white
 
     #Convert to gray scale
-    image_gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY )
+    image = cv.cvtColor(result, cv.COLOR_HSV2BGR )
+    image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     if verbose > 2:
         plt.imshow(image_gray, cmap="gray")
+        plt.show()
         print("INFO: gray scale image Shape {}.".format(image_gray.shape))
 
 
@@ -126,34 +130,38 @@ def ecg_to_csv(image_name, template_name, csv_name):
 
     if verbose > 2:
         plt.imshow(th1, cmap="gray")
+        plt.show()
         print("INFO: Binary image Shape {}.".format(th1.shape))
 
-    foreground  = 255-th1
-    contours, _ = cv.findContours(foreground, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-    rectangular_contours = get_rectangular_contours(contours)
+    foreground  = cv.morphologyEx(255-th1,cv.MORPH_DILATE,np.ones((2,2)),iterations=3)
+
+
+    # contours, _ = cv.findContours(foreground, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
+    # rectangular_contours = get_rectangular_contours(contours)
 
     if verbose > 1:
         plt.imshow(foreground, cmap="gray")
-
-    contour_image = image_gray.copy()
-
-    # find the biggest countour (c) by the area
-    c = max(contours, key = cv.contourArea)
-    x_border,y_border,w_border,h_border = cv.boundingRect(c)
-    # draw the biggest contour (c) in green
-    cv.rectangle(contour_image,(x_border,y_border),(x_border+w_border,y_border+h_border),(0,255,0),10)
-
-    if verbose > 1:
-        plt.imshow(contour_image, cmap="gray")
-        #TODO: add title
         plt.show()
 
+    # contour_image = image_gray.copy()
 
-    # ECG image extracted from the main image
+    # # find the biggest countour (c) by the area
+    # c = max(contours, key = cv.contourArea)
+    # x_border,y_border,w_border,h_border = cv.boundingRect(c)
+    # # draw the biggest contour (c) in green
+    # cv.rectangle(contour_image,(x_border,y_border),(x_border+w_border,y_border+h_border),(0,255,0),10)
+
+    # if verbose > 1:
+    #     plt.imshow(contour_image, cmap="gray")
+    #     #TODO: add title
+    #     plt.show()
+
+
+    # # ECG image extracted from the main image
     
 
-    foreground  = 255-th1[y_border+BORDER_GAP:y_border+h_border-BORDER_GAP,
-                        x_border+BORDER_GAP:x_border+w_border-BORDER_GAP]
+    # foreground  = 255-th1[y_border+BORDER_GAP:y_border+h_border-BORDER_GAP,
+    #                     x_border+BORDER_GAP:x_border+w_border-BORDER_GAP]
     if verbose > 1:
         plt.imshow(foreground, cmap = "gray")
         plt.show()
@@ -278,7 +286,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
                 if  location =='right':
                     sliced_labeled_line = labeled_line[:,0:y].copy()
                 elif location == 'left':
-                    sliced_labeled_line = labeled_line[:,y+wpulse:].copy()
+                    sliced_labeled_line = labeled_line[:,y+int(wpulse):].copy()
                 else:
                     sliced_labeled_line = labeled_line.copy()
 
@@ -289,7 +297,8 @@ def ecg_to_csv(image_name, template_name, csv_name):
             if verbose > 1:
                 if detected:
                     print('INFO: pulse detected by template in line {} in {}'.format(i,y))
-                    plt.imshow(line_copy[x:x+hpulse+1,y:y+wpulse+1], cmap ="gray")
+                    plt.imshow(line_copy[x:x+int(template_width)+1,y:y+int(template_height)+1], cmap ="gray")
+                    plt.show()
                 else:
                     print('INFO: pulse NOT detected by template in line {}'.format(i))
 
@@ -377,7 +386,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
 # plt.imshow(th, cmap="gray")
 # plt.show()
 
-df=ecg_to_csv('images/ecg_test.png' ,'images/pul.png', 'ecg_csv.csv' )
+df=ecg_to_csv('images/img20250221_05271756.png' ,'images/template.png', 'img20250221_052.csv' )
 
 print("THE END")
 
