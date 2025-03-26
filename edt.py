@@ -8,33 +8,38 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import skimage as ski
 import pytesseract
-from edt_utils import get_rectangular_contours, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
+from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
 from ss import pattern_match
-from edt_utils import process_line,get_values_from_img,measure_extract_pulse 
+from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_sequence
 from scipy.signal import find_peaks
 import operator
 
-def ecg_to_csv(image_name, template_name, csv_name):
+def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
-    BORDER_GAP = 2 # gap around the border
-    layout = (3,4)
-    # indicate if  there is a pulse
-    # pulse = 0 - pulse in all lines
-    # pulse = line_list - pulse present only on the the line llist
-    #
-    pulse = [0,1,2]  
-    rhythm = 4 # which line has the rhythum
-    verbose = 3
-    mmpsec = 25 # 25 mm/seg
-    mmpmv = 10 # 10 mm/mV
-    pulse_width_mm = 5 # pulse width in mm
-    pulse_height_mm =10  # pulse height in mm
-    pulse_per_sec = pulse_width_mm/mmpsec
-    pulse_per_mv= pulse_height_mm/mmpmv
-    sample_frequency = 500
-    time_lead = 2.5 # duratiom of the segment in seconds
-    num_sampling_points = time_lead/(1/sample_frequency)
-    location = 'right'
+    # BORDER_GAP = 2 # gap around the border
+    # layout = (3,4)
+    # # indicate if  there is a pulse
+    # # pulse = 0 - pulse in all lines
+    # # pulse = line_list - pulse present only on the the line llist
+    # #
+    # pulse = [0,1,2]  
+    # rhythm = 4 # which line has the rhythum
+    # verbose = 3
+    # mmpsec = 25 # 25 mm/seg
+    # mmpmv = 10 # 10 mm/mV
+    # pulse_width_mm = 5 # pulse width in mm
+    # pulse_height_mm =10  # pulse height in mm
+    # pulse_per_sec = pulse_width_mm/mmpsec
+    # pulse_per_mv= pulse_height_mm/mmpmv
+    # sample_frequency = 500
+    # time_lead = 2.5 # duratiom of the segment in seconds
+    # num_sampling_points = time_lead/(1/sample_frequency)
+    # location = 'right'
+
+    layout = config_dict['layout']
+    pulse  = config_dict['pulse']
+    rhythm = config_dict['rhythm']
+    verbose = config_dict['verbose']
 
     # the names dependending on the layout
     if layout[1]== 4 and layout[0]==3:
@@ -47,7 +52,20 @@ def ecg_to_csv(image_name, template_name, csv_name):
     elif layout[1]==2:
         raise NotImplementedError ('Not implemented' )
     elif layout[1]==1:
-        raise NotImplementedError ('Not implemented' )
+
+       # raise NotImplementedError ('Not implemented' )
+       lt_leads = [ ['I'],
+                    ['II'],
+                    ['III'],
+                    ['aVR'],
+                    ['aVL'],
+                    ['aVF'],
+                    ['V1'],
+                    ['V2'],
+                    ['V3'],
+                    ['V4'],
+                    ['V5'],
+                    ['V6']]
 
     else:
         raise ValueError('columns must be 4, 2 or 1')
@@ -77,17 +95,17 @@ def ecg_to_csv(image_name, template_name, csv_name):
         print("INFO: rhythm on line : {}.".format(rhythm)) 
 
 
-    config_dict ={}
-    config_dict['layout']=layout   # tuple with the layout
-    config_dict['rhythm'] = rhythm # which row has the rhythm signal
-    config_dict['verbose'] = verbose # 
-    config_dict['pulse'] = pulse # which lines have pulse
+    # config_dict ={}
+    # config_dict['layout']=layout   # tuple with the layout
+    # config_dict['rhythm'] = rhythm # which row has the rhythm signal
+    # config_dict['verbose'] = verbose # 
+    # config_dict['pulse'] = pulse # which lines have pulse
     
-    config_dict['pulse_width_mm']  = pulse_width_mm
-    config_dict['pulse_height_mm'] = pulse_height_mm
-    config_dict['pulse_per_mv']= pulse_per_mv
-    config_dict['pulse_per_sec']= pulse_per_sec
-    config_dict['num_sampling_points']= num_sampling_points
+    # config_dict['pulse_width_mm']  = pulse_width_mm
+    # config_dict['pulse_height_mm'] = pulse_height_mm
+    # config_dict['pulse_per_mv']= pulse_per_mv
+    # config_dict['pulse_per_sec']= pulse_per_sec
+    # config_dict['num_sampling_points']= num_sampling_points
 
     #load the image 
 
@@ -103,6 +121,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
         plt.imshow(image, cmap="gray")
         print("INFO: Image Shape {}.".format(image.shape))
 
+   
 
     img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
 
@@ -116,6 +135,8 @@ def ecg_to_csv(image_name, template_name, csv_name):
 
     #Convert to gray scale
     image = cv.cvtColor(result, cv.COLOR_HSV2BGR )
+
+   
     image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
     if verbose > 2:
@@ -187,7 +208,7 @@ def ecg_to_csv(image_name, template_name, csv_name):
 
     temp= py_blockproc(foreground,(1,foreground.shape[1]), func=0)
     median_temp = np.median(temp.flatten())
-    peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=20)
+    peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=temp.flatten().size//10)
     peak_heights = peak_dict['peak_heights']
 
     highest_peak_index = peak_indices[np.argsort(peak_heights)]
@@ -243,9 +264,9 @@ def ecg_to_csv(image_name, template_name, csv_name):
         labeled_line, nb = ndimage.label(line, structure=structure)
 
 
-        if verbose > 1:
-            print("INFO: Number of segments {} on line {}.".format(nb, i))
-            display_segments('Labeled line', labeled_line)
+        # if verbose > 1:
+        #     print("INFO: Number of segments {} on line {}.".format(nb, i))
+        #     display_segments('Labeled line', labeled_line)
         
         
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
@@ -288,11 +309,12 @@ def ecg_to_csv(image_name, template_name, csv_name):
                 elif location == 'left':
                     sliced_labeled_line = labeled_line[:,y+int(wpulse):].copy()
                 else:
-                    sliced_labeled_line = labeled_line.copy()
+                    sliced_labeled_line = labeled_line.copy()     
+            else:
+                 if is_nan(wpulse):
+                    wpulse = wt
+                    hpulse = ht
 
-            
-            
-            
 
             if verbose > 1:
                 if detected:
@@ -301,12 +323,14 @@ def ecg_to_csv(image_name, template_name, csv_name):
                     plt.show()
                 else:
                     print('INFO: pulse NOT detected by template in line {}'.format(i))
-
+                    sliced_labeled_line = labeled_line.copy() 
+           
+                
 
         else:
             print("INFO: line {} has no pulse to detect".format(i))
-            wpulse = np.nan
-            hpulse = np.nan
+            wpulse = wt
+            hpulse = ht
 
         # TODO: add info in config_dict  
         config_dict['wpulse']= wpulse
@@ -331,62 +355,54 @@ def ecg_to_csv(image_name, template_name, csv_name):
     ecg_df= segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv,num_sampling_points)
     ecg_df.to_csv(csv_name)
 
-    #
-    ecg_df.plot(subplots=True, figsize=(12, 12)); plt.legend(loc='best');plt.show()
-
     return ecg_df
 
-# verbose = 3
-# image_name = 'images/ecg_test.png'
+# Main program 
+filename = 'bucket/img20250221_12515211'
+image_name = filename + '.png'
+template_name = 'bucket/template.png'
 
-# #image_name = 'images/ecg_test.png'  # select image
-# image = cv.imread(image_name)
+csv_name =filename + '.csv'
+layout = (3,4)
+pulse = [0,1,2]  
+rhythm = 4 # which line has the rhythum
+verbose = 3
+mmpsec = 25 # 25 mm/seg
+mmpmv = 10 # 10 mm/mV
+pulse_width_mm = 5 # pulse width in mm
+pulse_height_mm =10  # pulse height in mm
+pulse_per_sec = pulse_width_mm/mmpsec
+pulse_per_mv= pulse_height_mm/mmpmv
+sample_frequency = 500
+time_lead = 2.5 # duratiom of the segment in seconds
+num_sampling_points = time_lead/(1/sample_frequency)
+location = 'right'
 
-#  # sanity check
-# if image is None:
-#     print('Cannot open image: ' + image_name)
-#     sys.exit(0)
+config_dict ={}
+config_dict['pulse'] = pulse # which lines have pulse
+config_dict['rhythm'] = rhythm # which row has the rhythm signal
+config_dict['verbose'] = verbose # 
+config_dict['mmpsec']= mmpsec
+config_dict['mmpmv']=mmpmv
+config_dict['pulse_width_mm'] = pulse_width_mm
+config_dict['pulse_height_mm'] = pulse_height_mm
+config_dict['pulse_per_sec '] = pulse_per_sec
+config_dict['pulse_per_mv'] = pulse_per_mv
+config_dict['sample_frequency'] = sample_frequency
+config_dict['time_lead'] = time_lead
+config_dict['location']= location
+config_dict['layout']=layout   # tuple with the layout    
+config_dict['pulse_width_mm']  = pulse_width_mm
+config_dict['pulse_height_mm'] = pulse_height_mm
+config_dict['pulse_per_mv']= pulse_per_mv
+config_dict['pulse_per_sec']= pulse_per_sec
+config_dict['num_sampling_points']= num_sampling_points
+df=ecg_to_csv(image_name ,template_name, csv_name, config_dict )
+#df.plot(subplots=True, figsize=(12, 12)); plt.legend(loc='best');plt.show()
 
-# if verbose > 2:
-#     plt.imshow(image, cmap="gray")
-#     print("INFO: Image Shape {}.".format(image.shape))
-
-
-# #Filter color to remove the grid
-
-# lower=(0,0,0) # black color
-# upper=(100,100,100) # dark gray
-# mask = cv.inRange(image, lower, upper)
-# result = image.copy()
-# result[mask!=255] = (255, 255, 255) # if it is not very dark set it to white
-
-# #Convert to gray scale
-# image_gray = cv.cvtColor(result, cv.COLOR_BGR2GRAY )
-
-# if verbose > 2:
-#     plt.imshow(image_gray, cmap="gray")
-#     print("INFO: gray scale image Shape {}.".format(image_gray.shape))
-
-
-
-# # use thresholding to transform the image into a binary one
-# ret, th1 = cv.threshold(image_gray, 127, 255,cv.THRESH_OTSU)
-
-# if verbose > 2:
-#     plt.imshow(th1, cmap="gray")
-#     print("INFO: Binary image Shape {}.".format(th1.shape))
-# th=th1
-# # kernel = np.ones((3,19), np.uint8) 
-# # th = cv.morphologyEx(th1, cv.MORPH_DILATE, 
-# #                            kernel, iterations=1) 
-# # print the output 
-# plt.imshow(th, cmap='gray') 
-# plt.show()
-# th = remove_text(th, 0.8)
-# plt.imshow(th, cmap="gray")
-# plt.show()
-
-df=ecg_to_csv('images/img20250221_05271756.png' ,'images/template.png', 'img20250221_052.csv' )
+# Plot in the lay out
+plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], figure_size = (20, 12))
+plt.show()
 
 print("THE END")
 

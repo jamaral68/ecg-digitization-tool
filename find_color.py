@@ -1,12 +1,20 @@
 import cv2
 import sys
 import numpy as np
+from edt_utils import extract_sequence
 
 def nothing(x):
     pass
 
 # Load in image
-image = cv2.imread('images/tiny_10433218.png')
+
+
+filename = 'bucket/tiny_11030257'
+image_name = filename + '.png'
+image = cv2.imread(image_name)
+
+
+
 
 # Create a window
 cv2.namedWindow('image')
@@ -47,6 +55,7 @@ while(1):
     upper = np.array([hMax, sMax, vMax])
 
     # Create HSV Image and threshold into a range.
+  
     hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
     mask = cv2.inRange(hsv, lower, upper)
     output = cv2.bitwise_and(image,image, mask= mask)
