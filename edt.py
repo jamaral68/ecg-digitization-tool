@@ -10,7 +10,7 @@ import skimage as ski
 import pytesseract
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
 from ss import pattern_match
-from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_sequence
+from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_image
 from scipy.signal import find_peaks
 import operator
 
@@ -40,6 +40,13 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     pulse  = config_dict['pulse']
     rhythm = config_dict['rhythm']
     verbose = config_dict['verbose']
+    strategy = config_dict['strategy']
+    thres_value = config_dict['thres_value']
+    lower = config_dict['lower']
+    upper = config_dict['upper']
+    kSize2d = config_dict['kSized2d']
+    kSize1d = config_dict['kSized1d']
+    perc_space_leads = config_dict['perc_space_leads']
 
     # the names dependending on the layout
     if layout[1]== 4 and layout[0]==3:
@@ -122,22 +129,30 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         print("INFO: Image Shape {}.".format(image.shape))
 
    
+    if strategy =='color':
+        img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
+        #Filter color to remove the grid
+        #lower=(0,0,0) # black color
+        #upper=(179,255,220) # dark gray
+        mask = cv.inRange(img_hsv, lower, upper)
+        result = img_hsv.copy()
+        result[mask!=255] = (255, 255, 255) # if it is not very dark set it to white
 
-    img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
+        #Convert to gray scale
+        image = cv.cvtColor(result, cv.COLOR_HSV2BGR )
+        image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
 
-    #Filter color to remove the grid
-    
-    lower=(0,0,0) # black color
-    upper=(179,255,220) # dark gray
-    mask = cv.inRange(img_hsv, lower, upper)
-    result = img_hsv.copy()
-    result[mask!=255] = (255, 255, 255) # if it is not very dark set it to white
+        # To binary image
+        ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY)
 
-    #Convert to gray scale
-    image = cv.cvtColor(result, cv.COLOR_HSV2BGR )
 
-   
-    image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    if strategy == 'filter':
+        image_gray = extract_image(image, kSize2d, kSize1d)
+        ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY) # transform to binary
+
+    if strategy == 'none':
+        image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+        ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY) # transform to binary
 
     if verbose > 2:
         plt.imshow(image_gray, cmap="gray")
@@ -145,9 +160,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         print("INFO: gray scale image Shape {}.".format(image_gray.shape))
 
 
-
-    # use thresholding to transform the image into a binary one
-    ret, th1 = cv.threshold(image_gray, 127, 255,cv.THRESH_OTSU)
 
     if verbose > 2:
         plt.imshow(th1, cmap="gray")
@@ -160,9 +172,9 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     # contours, _ = cv.findContours(foreground, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
     # rectangular_contours = get_rectangular_contours(contours)
 
-    if verbose > 1:
-        plt.imshow(foreground, cmap="gray")
-        plt.show()
+    # if verbose > 1:
+    #     plt.imshow(foreground, cmap="gray")
+    #     plt.show()
 
     # contour_image = image_gray.copy()
 
@@ -208,7 +220,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     temp= py_blockproc(foreground,(1,foreground.shape[1]), func=0)
     median_temp = np.median(temp.flatten())
-    peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=temp.flatten().size//10)
+    peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=round(temp.flatten().size*perc_space_leads, 0))
     peak_heights = peak_dict['peak_heights']
 
     highest_peak_index = peak_indices[np.argsort(peak_heights)]
@@ -264,9 +276,9 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         labeled_line, nb = ndimage.label(line, structure=structure)
 
 
-        # if verbose > 1:
-        #     print("INFO: Number of segments {} on line {}.".format(nb, i))
-        #     display_segments('Labeled line', labeled_line)
+        if verbose > 1:
+            print("INFO: Number of segments {} on line {}.".format(nb, i))
+            display_segments('Labeled line' + str(i), labeled_line)
         
         
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
@@ -314,8 +326,10 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                  if is_nan(wpulse):
                     wpulse = wt
                     hpulse = ht
+                 sliced_labeled_line = labeled_line.copy() 
 
-
+           
+                
             if verbose > 1:
                 if detected:
                     print('INFO: pulse detected by template in line {} in {}'.format(i,y))
@@ -323,7 +337,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     plt.show()
                 else:
                     print('INFO: pulse NOT detected by template in line {}'.format(i))
-                    sliced_labeled_line = labeled_line.copy() 
+                    #sliced_labeled_line = labeled_line.copy() 
            
                 
 
@@ -358,7 +372,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     return ecg_df
 
 # Main program 
-filename = 'bucket/img20250221_12515211'
+filename = 'bucket/img20250221_12050781'
 image_name = filename + '.png'
 template_name = 'bucket/template.png'
 
@@ -366,7 +380,7 @@ csv_name =filename + '.csv'
 layout = (3,4)
 pulse = [0,1,2]  
 rhythm = 4 # which line has the rhythum
-verbose = 3
+verbose = 2
 mmpsec = 25 # 25 mm/seg
 mmpmv = 10 # 10 mm/mV
 pulse_width_mm = 5 # pulse width in mm
@@ -377,6 +391,14 @@ sample_frequency = 500
 time_lead = 2.5 # duratiom of the segment in seconds
 num_sampling_points = time_lead/(1/sample_frequency)
 location = 'right'
+strategy = 'filter'  # It can be filter or color
+lower=(0,0,0) # black color
+upper=(179,255,220) # dark gray
+thres_value = 180
+kSize2d = 3 
+kSize1d = 3
+perc_space_leads =0.2
+
 
 config_dict ={}
 config_dict['pulse'] = pulse # which lines have pulse
@@ -397,6 +419,15 @@ config_dict['pulse_height_mm'] = pulse_height_mm
 config_dict['pulse_per_mv']= pulse_per_mv
 config_dict['pulse_per_sec']= pulse_per_sec
 config_dict['num_sampling_points']= num_sampling_points
+config_dict['strategy'] = strategy
+config_dict['lower']= lower
+config_dict['upper']= upper
+config_dict['thres_value'] = thres_value
+config_dict['kSized2d'] = kSize2d
+config_dict['kSized1d'] = kSize1d
+config_dict['perc_space_leads'] = perc_space_leads
+
+
 df=ecg_to_csv(image_name ,template_name, csv_name, config_dict )
 #df.plot(subplots=True, figsize=(12, 12)); plt.legend(loc='best');plt.show()
 

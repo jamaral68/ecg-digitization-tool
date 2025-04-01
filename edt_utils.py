@@ -425,7 +425,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
    
 
     
-    for label in segment_labels:
+    for l, label in enumerate(segment_labels):
         roi = (labeled_line==label)
         sl = ndimage.find_objects(roi)
         if len(sl)==0:
@@ -433,8 +433,8 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
         roi = labeled_line[sl[0][0], sl[0][1]] # slice in x and slice in y
         
         roi_length = roi.shape[1]
-
-        if roi_length >= np.round((app_seg_size * 0.25), 0):
+        temp = app_seg_size * 0.25
+        if roi_length >= np.round((temp), 0):
             roi_copy = (roi == label) * np.uint8(255) #np.where(roi == label, 255, 0).astype("uint8")
 
             # calculate the ratio between length and approximate segment size
@@ -720,10 +720,12 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                 line_dict['curves'].append(segment_dict)
 
             elif ratio < 1.0:
-                    print("INFO: Garbage {}.".format(ratio))
-                    break
+                    dummy = 0 
+                    #print("INFO: Garbage {}.".format(ratio))
+                    #break
         else:
-            print("INFO: Garbage length {}.".format(roi_length))
+            dummy = 0
+            print("INFO: Garbage length {} label  {}.".format(roi_length, label, ))
             
     line_dict['curves'] = sorted(line_dict['curves'], key=lambda d: d['start_y'])
     for i, d in enumerate(line_dict['curves']):
