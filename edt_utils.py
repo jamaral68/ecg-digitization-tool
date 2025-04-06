@@ -413,7 +413,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
 
 
     app_seg_size = labeled_line.shape[1] // config_dict['layout'][1]
-    if verbose > 2:
+    if verbose > 1:
         print("INFO: unique label {}.".format(u))
         print("INFO: count {}.".format(c))
         print("INFO: segment labels {}.".format(segment_labels))
@@ -423,25 +423,33 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
 
     segment_ratios = []
    
-
+    temp = np.round(app_seg_size * 0.25, 0)
     
     for l, label in enumerate(segment_labels):
+        
+        #print ("INFO: label count  = {}.".format(c[label]))
+
+
         roi = (labeled_line==label)
+       
         sl = ndimage.find_objects(roi)
         if len(sl)==0:
             continue
-        roi = labeled_line[sl[0][0], sl[0][1]] # slice in x and slice in y
-        
+        print ("INFO: sl  = {}.".format(sl))
+        roi = roi[sl[0][0], sl[0][1]] # slice in x and slice in y
+        print ("INFO: label count  = {}.".format(c[label]))
         roi_length = roi.shape[1]
-        temp = app_seg_size * 0.25
-        if roi_length >= np.round((temp), 0):
-            roi_copy = (roi == label) * np.uint8(255) #np.where(roi == label, 255, 0).astype("uint8")
+        print(roi_length)
+        if roi_length >= temp:
+            #roi_copy = (roi == label) * np.uint8(255) #np.where(roi == label, 255, 0).astype("uint8")
+            roi_copy = (roi) * np.uint8(255)
 
             # calculate the ratio between length and approximate segment size
             # to check if teh segmentation concatenate 2 ou more segments
             ratio = round(roi_length / app_seg_size, 0) # calculate the ratio between length and appromate segment
 
-            if verbose > 1:
+
+            if verbose > 0:
                 print("INFO: label = {}, length = {} and ratio = {}.".format(label, roi_copy.shape[1], ratio))
                 # plt.imshow(roi_copy)
                 # plt.show()
@@ -520,7 +528,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                 seg = np.where(seg == label, 255, 0)
                 #seg = seg.astype("uint8")
 
-                if verbose > 1 :
+                if verbose > 0 :
                     title = "line: " + str(line_number) + "segment: " + str(label)
                     plt.imshow(seg)
                     plt.title(title)
@@ -564,7 +572,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                 seg = np.where(seg==label,255,0)
                 #seg = seg.astype("uint8")
 
-                if verbose > 1 :
+                if verbose > 0 :
                     title = "line: " + str(line_number) + "segment: " + str(label)
                     plt.imshow(seg)
                     plt.title(title)
@@ -611,7 +619,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                 seg = np.where(seg == label, 255, 0)
                 #seg = seg.astype("uint8")
 
-                if verbose > 1 :
+                if verbose > 0 :
                     title = "line: " + str(line_number) + " segment: " + str(label)
                     plt.imshow(seg)
                     plt.title(title)
@@ -654,7 +662,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                 seg = np.where(seg == label, 255, 0)
                 # seg = seg.astype("uint8")
 
-                if verbose > 1 :
+                if verbose > 0 :
                     title = "line: "+ str(line_number) + " segment : " + str(label)
                     plt.imshow(seg)
                     plt.title(title)
@@ -700,7 +708,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
 
                 seg = np.where(seg == label, 255, 0)
 
-                if verbose > 1:
+                if verbose > 0:
                     title = "line: " + str(line_number) + " segment: " + str(label)
                     plt.imshow(seg)
                     plt.title(title)
@@ -722,17 +730,49 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
             elif ratio < 1.0:
                     dummy = 0 
                     #print("INFO: Garbage {}.".format(ratio))
-                    #break
+                    continue
         else:
             dummy = 0
-            print("INFO: Garbage length {} label  {}.".format(roi_length, label, ))
+            print("INFO: Garbage length {} label  {} {}.".format(roi_length, label, l))
             
     line_dict['curves'] = sorted(line_dict['curves'], key=lambda d: d['start_y'])
     for i, d in enumerate(line_dict['curves']):
         d['name'] = line_leads[i]  #add  the name of the segments
     return line_dict
 
-def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, x_spacing = 100, y_spacing = 0.1, figure_size = (20, 12)):
+# def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, x_spacing = 100, y_spacing = 0.1, figure_size = (20, 12)):
+#     if (n_rows * n_columns) < len(columns):
+#         raise Exception('Columns must be the equal or smaller than the number of rows and columns.')
+#     fig, axes = plt.subplots(n_rows, n_columns, figsize = figure_size)
+#     fig.suptitle(title,fontsize = 20)
+    
+#     for index,col in enumerate(columns):
+        
+#         if n_rows == 1 or n_columns == 1:
+#             current_ax = axes[index]
+#         else:
+#             row_index = int(index/n_columns)
+#             col_index = int(index - n_columns*row_index)
+#             ax = axes[row_index][col_index]
+        
+        
+#         ax.plot(df[col]) 
+#         ax.set_title(col)
+#         #y_ticks = np.linspace(df[col].min(),df[col].max(),10)
+#         y_ticks = np.arange(df[col].min(),df[col].max(),y_spacing)
+#         ax.set_yticks(y_ticks)
+#         x_max = len(df[col].values)
+#         #x_ticks = np.linspace(0,x_max,10, endpoint= False)
+#         x_ticks =list(range(0,x_max,x_spacing))
+#         ax.tick_params(axis='x', rotation=90)
+#         ax.set_xticks(x_ticks)
+#         #label = r'$\mu={:2.2f},\ \sigma={:2.2f},\ median={:2.2f},\ mode={:2.2f}$'.format(df[col].mean(),df[col].std(),df[col].median(),df[col].mode().values[0])
+#         #ax.set_xlabel(label)
+#         ax.grid(True)
+#     plt.subplots_adjust(top=0.92,hspace = 0.45,wspace = 0.5)    
+#     plt.show()
+
+def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, fs = 500, figure_size = (20, 12)):
     if (n_rows * n_columns) < len(columns):
         raise Exception('Columns must be the equal or smaller than the number of rows and columns.')
     fig, axes = plt.subplots(n_rows, n_columns, figsize = figure_size)
@@ -746,20 +786,35 @@ def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, x_spacing = 100, y_spa
             row_index = int(index/n_columns)
             col_index = int(index - n_columns*row_index)
             ax = axes[row_index][col_index]
+            
         
         
-        ax.plot(df[col]) 
-        ax.set_title(col)
-        #y_ticks = np.linspace(df[col].min(),df[col].max(),10)
-        y_ticks = np.arange(df[col].min(),df[col].max(),y_spacing)
-        ax.set_yticks(y_ticks)
-        x_max = len(df[col].values)
-        #x_ticks = np.linspace(0,x_max,10, endpoint= False)
-        x_ticks =list(range(0,x_max,x_spacing))
-        ax.tick_params(axis='x', rotation=90)
-        ax.set_xticks(x_ticks)
-        #label = r'$\mu={:2.2f},\ \sigma={:2.2f},\ median={:2.2f},\ mode={:2.2f}$'.format(df[col].mean(),df[col].std(),df[col].median(),df[col].mode().values[0])
-        #ax.set_xlabel(label)
-        ax.grid(True)
+        # ax.plot(df[col]) 
+        # ax.set_title(col)
+        signal = df[col]
+        ts = np.arange(signal.size) / fs
+
+        ax= plot_ecg_signal(ts, signal, ax)
+        
     plt.subplots_adjust(top=0.92,hspace = 0.45,wspace = 0.5)    
     plt.show()
+
+
+def plot_ecg_signal(time, signal,ax):
+    #fig = plt.figure(figsize=(15, 3));
+    # ax = plt.axes();
+    ax.plot(time, signal);
+    # setup major and minor ticks
+    min_t = int(np.min(time))
+    max_t = round(np.max(time))
+    major_ticks = np.arange(min_t, max_t+1)
+    ax.set_xticks(major_ticks)
+    # Turn on the minor ticks on
+    ax.minorticks_on()
+    # Make the major grid
+    ax.grid(which='major', linestyle='-', color='red', linewidth='1.0')
+    # Make the minor grid
+    ax.grid(which='minor', linestyle=':', color='black', linewidth='0.5')
+    plt.xlabel('Time (sec)');
+    plt.ylabel('Amplitude')
+    return ax
