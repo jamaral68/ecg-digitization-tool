@@ -106,7 +106,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # config_dict ={}
     # config_dict['layout']=layout   # tuple with the layout
-    # config_dict['rhythm'] = rhythm # which row has the rhythm signal
+    # config_dict['rhythm'] = rhythm # which row has the rhythm sig
     # config_dict['verbose'] = verbose # 
     # config_dict['pulse'] = pulse # which lines have pulse
     
@@ -134,7 +134,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     if strategy =='color':
         img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
         #Filter color to remove the grid
-        #lower=(0,0,0) # black color
+        #lower=(0,0,0) # black colssor
         #upper=(179,255,220) # dark gray
         mask = cv.inRange(img_hsv, lower, upper)
         result = img_hsv.copy()
