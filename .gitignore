@@ -3,3 +3,9 @@
 /**/*.csv
 /**/*.jpg
 /**/*.jpg
+/ecgvenv
+/ecgvenvwin
+/.vscode
+/.spyproject
+/ptbxlimage
+/__pycache__

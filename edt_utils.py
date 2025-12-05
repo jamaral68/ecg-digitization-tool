@@ -10,7 +10,7 @@ import numpy as np
 import cv2 as cv
 import scipy
 import sys
-import pytesseract
+#import pytesseract
 import pprint
 import math
 import ss
@@ -435,11 +435,11 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
         sl = ndimage.find_objects(roi)
         if len(sl)==0:
             continue
-        print ("INFO: sl  = {}.".format(sl))
+        #print ("INFO: sl  = {}.".format(sl))
         roi = roi[sl[0][0], sl[0][1]] # slice in x and slice in y
-        print ("INFO: label count  = {}.".format(c[label]))
+        #print ("INFO: label count  = {}.".format(c[label]))
         roi_length = roi.shape[1]
-        print(roi_length)
+        #print(roi_length)
         if roi_length >= temp:
             #roi_copy = (roi == label) * np.uint8(255) #np.where(roi == label, 255, 0).astype("uint8")
             roi_copy = (roi) * np.uint8(255)
@@ -719,6 +719,8 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                 segment_dict['lseg'] = ls
                 segment_dict['xseg'] = xs
                 segment_dict['yseg'] = ys
+                
+                segment_dict['firstpixel_abs_y'] = np.argmax(seg[:,0]) + segment_dict['start_x'] + ys[0]
 
                 baseline = np.argmax(np.std(seg, axis =1))
                 segment_dict['baseline'] = baseline
@@ -733,7 +735,7 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
                     continue
         else:
             dummy = 0
-            print("INFO: Garbage length {} label  {} {}.".format(roi_length, label, l))
+            #print("INFO: Garbage length {} label  {} {}.".format(roi_length, label, l))
             
     line_dict['curves'] = sorted(line_dict['curves'], key=lambda d: d['start_y'])
     for i, d in enumerate(line_dict['curves']):
@@ -798,7 +800,7 @@ def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, fs = 500, figure_size 
         
     plt.subplots_adjust(top=0.92,hspace = 0.45,wspace = 0.5)    
     plt.show()
-
+    return fig
 
 def plot_ecg_signal(time, signal,ax):
     #fig = plt.figure(figsize=(15, 3));
