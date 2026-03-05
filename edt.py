@@ -8,7 +8,6 @@ from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, 
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_image
 from scipy.signal import find_peaks
 
-
 def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     layout = config_dict['layout']
