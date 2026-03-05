@@ -78,22 +78,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     else:
         print("INFO: rhythm on line : {}.".format(rhythm)) 
 
-
-    # config_dict ={}
-    # config_dict['layout']=layout   # tuple with the layout
-    # config_dict['rhythm'] = rhythm # which row has the rhythm sig
-    # config_dict['verbose'] = verbose # 
-    # config_dict['pulse'] = pulse # which lines have pulse
-    
-    # config_dict['pulse_width_mm']  = pulse_width_mm
-    # config_dict['pulse_height_mm'] = pulse_height_mm
-    # config_dict['pulse_per_mv']= pulse_per_mv
-    # config_dict['pulse_per_sec']= pulse_per_sec
-    # config_dict['num_sampling_points']= num_sampling_points
-
     #load the image 
-
-    #image_name = 'images/ecg_test.png'  # select image
     image = cv.imread(image_name)
 
     # sanity check
