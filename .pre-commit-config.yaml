@@ -1,0 +1,44 @@
+repos:
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.8.1
+    hooks:
+      - id: nbstripout
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+    - id: trailing-whitespace
+      description: Trims trailing whitespaces.
+      exclude: 'deprecated/'
+    - id: end-of-file-fixer
+      description: Fixes the end of the file
+      exclude: 'deprecated/'
+    - id: mixed-line-ending
+      args: ['--fix=lf']
+      description: Forces to replace line ending by the UNIX 'lf' character.
+      exclude: 'deprecated/'
+    - id: check-added-large-files
+      args: ['--maxkb=10240']
+      description: Prevents from adding large files.
+      exclude: 'deprecated/'
+    - id: check-yaml
+      description: Checks if a YAML file is syntactically valid.
+      exclude: 'deprecated/'
+    - id: check-shebang-scripts-are-executable
+      description: Checks if the shebang scripts are executable.
+      exclude: 'deprecated/'
+    - id: name-tests-test
+      args: [--pytest-test-first]
+      description: Checks if the test files are named correctly.
+      exclude: 'deprecated/'
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version.
+    rev: v0.14.14
+    hooks:
+      # Run the linter.
+      - id: ruff
+        args: [ --fix ]
+        exclude: 'deprecated/'
+      # Run the formatter.
+      - id: ruff-format
+        exclude: 'deprecated/'

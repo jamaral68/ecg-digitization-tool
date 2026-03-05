@@ -18,4 +18,3 @@ run:
 
 shell:
 	docker run --rm -it $(IMAGE) bash
-

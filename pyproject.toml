@@ -25,6 +25,10 @@ torchvision = [
     {url = "https://download.pytorch.org/whl/rocm6.0/torchvision-0.18.1%2Brocm6.0-cp312-cp312-linux_x86_64.whl", markers = "sys_platform == 'linux'"}
 ]
 nbconvert = "^7.17.0"
+botocore = {extras = ["crt"], version = "^1.42.61"}
+python-dotenv = "^1.2.2"
+pre-commit = "^4.5.1"
+nbstripout = "^0.9.1"
 
 
 [build-system]

@@ -7,11 +7,13 @@
 
 # Scanned images will be output to directory named 'output'
 from pathlib import Path
-#from pyimagesearch import transform
-#from pyimagesearch import imutils
+
+# from pyimagesearch import transform
+# from pyimagesearch import imutils
 from scipy.spatial import distance as dist
 from matplotlib.patches import Polygon
-#import polygon_interacter as poly_i
+
+# import polygon_interacter as poly_i
 import numpy as np
 import matplotlib.pyplot as plt
 import itertools
@@ -22,11 +24,6 @@ from matplotlib.lines import Line2D
 from matplotlib.artist import Artist
 import argparse
 import os
-
-
-
-
-
 
 
 class ECGScanner(object):
@@ -43,6 +40,8 @@ class ECGScanner(object):
         morph_kernel_size=11,
         canny_sigma=0.75,
         rescaled_height=500.0,
+        clahe_clip_limit=2.0,
+        clahe_tile_grid_size=8,
     ):
         """
         Args:
@@ -65,6 +64,8 @@ class ECGScanner(object):
         self.morph_kernel_size = morph_kernel_size
         self.canny_sigma = canny_sigma
         self.rescaled_height = rescaled_height
+        self.clahe_clip_limit = clahe_clip_limit
+        self.clahe_tile_grid_size = clahe_tile_grid_size
 
     def filter_corners(
         self,
@@ -235,18 +236,18 @@ class ECGScanner(object):
     def order_points(pts):
         # sort the points based on their x-coordinates
         xSorted = pts[np.argsort(pts[:, 0]), :]
-    
+
         # grab the left-most and right-most points from the sorted
         # x-roodinate points
         leftMost = xSorted[:2, :]
         rightMost = xSorted[2:, :]
-    
+
         # now, sort the left-most coordinates according to their
         # y-coordinates so we can grab the top-left and bottom-left
         # points, respectively
         leftMost = leftMost[np.argsort(leftMost[:, 1]), :]
         (tl, bl) = leftMost
-    
+
         # now that we have the top-left coordinate, use it as an
         # anchor to calculate the Euclidean distance between the
         # top-left and right-most points; by the Pythagorean
@@ -254,11 +255,10 @@ class ECGScanner(object):
         # our bottom-right point
         D = dist.cdist(tl[np.newaxis], rightMost, "euclidean")[0]
         (br, tr) = rightMost[np.argsort(D)[::-1], :]
-    
+
         # return the coordinates in top-left, top-right,
         # bottom-right, and bottom-left order
-        return np.array([tl, tr, br, bl], dtype = "float32")
-
+        return np.array([tl, tr, br, bl], dtype="float32")
 
     def four_point_transform(self, image, pts):
         # obtain a consistent order of the points and unpack them
@@ -285,11 +285,15 @@ class ECGScanner(object):
         # (i.e. top-down view) of the image, again specifying points
         # in the top-left, top-right, bottom-right, and bottom-left
         # order
-        dst = np.array([
-            [0, 0],
-            [maxWidth - 1, 0],
-            [maxWidth - 1, maxHeight - 1],
-            [0, maxHeight - 1]], dtype = "float32")
+        dst = np.array(
+            [
+                [0, 0],
+                [maxWidth - 1, 0],
+                [maxWidth - 1, maxHeight - 1],
+                [0, maxHeight - 1],
+            ],
+            dtype="float32",
+        )
 
         # compute the perspective transform matrix and then apply it
         M = cv2.getPerspectiveTransform(rect, dst)
@@ -299,7 +303,7 @@ class ECGScanner(object):
         return warped
 
     @staticmethod
-    def resize(image, width = None, height = None, inter = cv2.INTER_AREA):
+    def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
         # initialize the dimensions of the image to be resized and
         # grab the image size
         dim = None
@@ -325,11 +329,10 @@ class ECGScanner(object):
             dim = (width, int(h * r))
 
         # resize the image
-        resized = cv2.resize(image, dim, interpolation = inter)
+        resized = cv2.resize(image, dim, interpolation=inter)
 
         # return the resized image
         return resized
-
 
     def auto_canny(self, gray):
         v = np.median(gray)
@@ -354,7 +357,9 @@ class ECGScanner(object):
         )
 
         # dilate helps to remove potential holes between edge segments
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size))
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size)
+        )
         dilated = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
 
         # find edges and mark them in the output map using the Canny algorithm
@@ -440,7 +445,6 @@ class ECGScanner(object):
         return new_points.reshape(4, 2)
 
     def scan(self, image_path):
-
         # load the image and compute the ratio of the old height
         # to the new height, clone it, and resize it
         image = cv2.imread(image_path)
@@ -462,21 +466,28 @@ class ECGScanner(object):
 
         # convert the warped image to grayscale
         gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-
+        # equalização de histograma adaptativa (CLAHE)
+        clahe = cv2.createCLAHE(
+            clipLimit=self.clahe_clip_limit,
+            tileGridSize=(self.clahe_tile_grid_size, self.clahe_tile_grid_size),
+        )
+        gray_clahe = clahe.apply(gray)
         # sharpen image
-        sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
-        sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
+        # sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
+        # sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
+
+        # sharpen_clahe = cv2.GaussianBlur(gray_clahe, (0, 0), 3)
+        # sharpen_clahe = cv2.addWeighted(gray_clahe, 1.5, sharpen_clahe, -0.5, 0)
 
         # apply adaptive threshold to get black and white effect
         thresh = cv2.adaptiveThreshold(
-            sharpen, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
         )
+        # thresh_clahe = cv2.adaptiveThreshold(
+        #    gray_clahe, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
+        # )
 
-        # save the transformed image
-        basename = os.path.basename(image_path)
-        cv2.imwrite(self.output_dir / basename, thresh)
-        print("Proccessed " + basename)
-
+        return thresh, gray_clahe
 
 
 class PolygonInteractor(object):
@@ -489,22 +500,24 @@ class PolygonInteractor(object):
 
     def __init__(self, ax, poly):
         if poly.figure is None:
-            raise RuntimeError('You must first add the polygon to a figure or canvas before defining the interactor')
+            raise RuntimeError(
+                "You must first add the polygon to a figure or canvas before defining the interactor"
+            )
         self.ax = ax
         canvas = poly.figure.canvas
         self.poly = poly
 
         x, y = zip(*self.poly.xy)
-        self.line = Line2D(x, y, marker='o', markerfacecolor='r', animated=True)
+        self.line = Line2D(x, y, marker="o", markerfacecolor="r", animated=True)
         self.ax.add_line(self.line)
 
-        cid = self.poly.add_callback(self.poly_changed)
+        # cid = self.poly.add_callback(self.poly_changed)
         self._ind = None  # the active vert
 
-        canvas.mpl_connect('draw_event', self.draw_callback)
-        canvas.mpl_connect('button_press_event', self.button_press_callback)
-        canvas.mpl_connect('button_release_event', self.button_release_callback)
-        canvas.mpl_connect('motion_notify_event', self.motion_notify_callback)
+        canvas.mpl_connect("draw_event", self.draw_callback)
+        canvas.mpl_connect("button_press_event", self.button_press_callback)
+        canvas.mpl_connect("button_release_event", self.button_release_callback)
+        canvas.mpl_connect("motion_notify_event", self.motion_notify_callback)
         self.canvas = canvas
 
     def get_poly_points(self):
@@ -517,20 +530,20 @@ class PolygonInteractor(object):
         self.canvas.blit(self.ax.bbox)
 
     def poly_changed(self, poly):
-        'this method is called whenever the polygon object is called'
+        "this method is called whenever the polygon object is called"
         # only copy the artist props to the line (except visibility)
         vis = self.line.get_visible()
         Artist.update_from(self.line, poly)
         self.line.set_visible(vis)  # don't use the poly visibility state
 
     def get_ind_under_point(self, event):
-        'get the index of the vertex under point if within epsilon tolerance'
+        "get the index of the vertex under point if within epsilon tolerance"
 
         # display coords
         xy = np.asarray(self.poly.xy)
         xyt = self.poly.get_transform().transform(xy)
         xt, yt = xyt[:, 0], xyt[:, 1]
-        d = np.sqrt((xt - event.x)**2 + (yt - event.y)**2)
+        d = np.sqrt((xt - event.x) ** 2 + (yt - event.y) ** 2)
         indseq = np.nonzero(np.equal(d, np.amin(d)))[0]
         ind = indseq[0]
 
@@ -540,7 +553,7 @@ class PolygonInteractor(object):
         return ind
 
     def button_press_callback(self, event):
-        'whenever a mouse button is pressed'
+        "whenever a mouse button is pressed"
         if not self.showverts:
             return
         if event.inaxes is None:
@@ -550,7 +563,7 @@ class PolygonInteractor(object):
         self._ind = self.get_ind_under_point(event)
 
     def button_release_callback(self, event):
-        'whenever a mouse button is released'
+        "whenever a mouse button is released"
         if not self.showverts:
             return
         if event.button != 1:
@@ -558,7 +571,7 @@ class PolygonInteractor(object):
         self._ind = None
 
     def motion_notify_callback(self, event):
-        'on mouse movement'
+        "on mouse movement"
         if not self.showverts:
             return
         if self._ind is None:
@@ -582,7 +595,6 @@ class PolygonInteractor(object):
         self.canvas.blit(self.ax.bbox)
 
 
-
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     group = ap.add_mutually_exclusive_group(required=True)
@@ -603,7 +615,8 @@ if __name__ == "__main__":
 
     valid_formats = [".jpg", ".jpeg", ".jp2", ".png", ".bmp", ".tiff", ".tif"]
 
-    get_ext = lambda f: os.path.splitext(f)[1].lower()
+    def get_ext(f):
+        return os.path.splitext(f)[1].lower()
 
     # Scan single image specified by command line argument --image <IMAGE_PATH>
     if im_file_path:
@@ -614,4 +627,3 @@ if __name__ == "__main__":
         im_files = [f for f in os.listdir(im_dir) if get_ext(f) in valid_formats]
         for im in im_files:
             scanner.scan(im_dir + "/" + im)
-

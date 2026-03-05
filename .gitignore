@@ -9,3 +9,8 @@
 /.spyproject
 /ptbxlimage
 /__pycache__
+
+datasets/
+.env
+__pycache__/
+deprecated/

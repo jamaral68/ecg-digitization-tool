@@ -12,12 +12,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libxext6 \
       libxrender1 \
     && rm -rf /var/lib/apt/lists/*
-    
-# Pacotes Python 
+
+# Pacotes Python
 RUN python -m pip install --upgrade pip setuptools wheel && \
     python -m pip install \
       numpy pandas matplotlib scipy opencv-python pillow pytesseract boto3 scikit-image && \
     python -m pip install \
       torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.1
-    
+
 WORKDIR /workspace
