@@ -11,26 +11,6 @@ from scipy.signal import find_peaks
 
 def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
-    # BORDER_GAP = 2 # gap around the border
-    # layout = (3,4)
-    # # indicate if  there is a pulse
-    # # pulse = 0 - pulse in all lines
-    # # pulse = line_list - pulse present only on the the line llist
-    # #
-    # pulse = [0,1,2]  
-    # rhythm = 4 # which line has the rhythum
-    # verbose = 3
-    # mmpsec = 25 # 25 mm/seg
-    # mmpmv = 10 # 10 mm/mV
-    # pulse_width_mm = 5 # pulse width in mm
-    # pulse_height_mm =10  # pulse height in mm
-    # pulse_per_sec = pulse_width_mm/mmpsec
-    # pulse_per_mv= pulse_height_mm/mmpmv
-    # sample_frequency = 500
-    # time_lead = 2.5 # duratiom of the segment in seconds
-    # num_sampling_points = time_lead/(1/sample_frequency)
-    # location = 'right'
-
     layout = config_dict['layout']
     pulse  = config_dict['pulse']
     rhythm = config_dict['rhythm']
@@ -376,7 +356,7 @@ filename = 'ecg_test'
 image_name = filename + '.png'
 template_name = 'bucket/template.png'
 
-csv_name =filename + '.csv'
+csv_name = filename + '.csv'
 layout = (3,4)
 pulse = [0,1,2]  
 rhythm = 4 # which line has the rhythum
@@ -442,7 +422,3 @@ plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], fs =
 plt.show()
 
 print("THE END")
-
-
-
-    
