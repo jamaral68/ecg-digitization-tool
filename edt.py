@@ -1,18 +1,13 @@
 import sys
-import scipy
 import cv2 as cv
 import numpy as np
 import pandas as pd
 from scipy import ndimage
 from matplotlib import pyplot as plt
-from PIL import Image
-import skimage as ski
-import pytesseract
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
-from ss import pattern_match
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_image
 from scipy.signal import find_peaks
-import operator
+
 
 def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
