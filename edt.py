@@ -1,7 +1,6 @@
 import sys
 import cv2 as cv
 import numpy as np
-import pandas as pd
 from scipy import ndimage
 from matplotlib import pyplot as plt
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
@@ -157,7 +156,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.imshow(foreground, cmap = "gray")
         plt.show()
 
-
     template_name = 'pul.png'
     template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
 
@@ -182,9 +180,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     highest_peak_index = peak_indices[np.argsort(peak_heights)]
 
-
-
-    if verbose > 0 :
+    if verbose > 0:
         plt.plot(temp.flatten())
         # get the leads and the rhythm
         plt.plot(highest_peak_index[-(layout[0]+1):], temp[highest_peak_index[-(layout[0]+1):]], "x")
@@ -324,7 +320,7 @@ csv_name = filename + '.csv'
 layout = (3,4)
 pulse = [0,1,2]  
 rhythm = 4 # which line has the rhythum
-verbose = 1
+verbose = 6
 mmpsec = 25 # 25 mm/seg
 mmpmv = 10 # 10 mm/mV
 pulse_width_mm = 5 # pulse width in mm
