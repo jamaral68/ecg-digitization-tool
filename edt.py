@@ -377,7 +377,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     return ecg_df
 
 # Main program 
-filename = 'bucket/img20250221_12050781'
+filename = 'ecg_test'
 image_name = filename + '.png'
 template_name = 'bucket/template.png'
 
