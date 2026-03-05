@@ -2,10 +2,9 @@
 /**/*.png
 /**/*.csv
 /**/*.jpg
-/**/*.jpg
 /ecgvenv
 /ecgvenvwin
 /.vscode
 /.spyproject
 /ptbxlimage
-/__pycache__
+__pycache__/
