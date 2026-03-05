@@ -1,19 +1,11 @@
-
 from matplotlib import pyplot as plt
-from itertools import groupby
 from scipy import interpolate
 from scipy import ndimage
-from PIL import Image
-import skimage as ski
 import pandas as pd
 import numpy as np
 import cv2 as cv
-import scipy
-import sys
-#import pytesseract
-import pprint
+import pytesseract
 import math
-import ss
 
 def laplacian_filter(img, kSize=3, gSize=3, alpha=1.0):
     input_is_bgr = len(img.shape) == 3

@@ -55,7 +55,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         raise ValueError('columns must be 4, 2 or 1')
     
     # Define pulse detection
-
     if pulse == 0 :
         print("INFO: No pulse to be detected")
     elif pulse == -1:
@@ -72,7 +71,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         raise ValueError('pulse should  be 0, an int or a list')
     
     # Define rhythm
-
     if rhythm == 0:
         print("INFO: No rhythm lead") 
     else:
@@ -90,7 +88,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.imshow(image)
         print("INFO: Image Shape {}.".format(image.shape))
 
-   
     if strategy =='color':
         img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
         #Filter color to remove the grid
@@ -99,14 +96,11 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         mask = cv.inRange(img_hsv, lower, upper)
         result = img_hsv.copy()
         result[mask!=255] = (255, 255, 255) # if it is not very dark set it to white
-
         #Convert to gray scale
         image = cv.cvtColor(result, cv.COLOR_HSV2BGR )
         image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-
         # To binary image
         ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY)
-
 
     if strategy == 'filter':
         image_gray = extract_image(image, kSize2d, kSize1d)
@@ -165,7 +159,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.show()
 
 
-    #template_name = 'images/pul.png'
+    template_name = 'pul.png'
     template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
 
     # sanity check
@@ -182,7 +176,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.show()
 
     # Extract the individual leads (lines)
-
     temp= py_blockproc(foreground,(1,foreground.shape[1]), func=0)
     median_temp = np.median(temp.flatten())
     peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=round(temp.flatten().size*perc_space_leads, 0))
@@ -200,9 +193,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.show()
 
     # Calculate the distance between selected peaks
-
     ordered_hp_index = sorted(highest_peak_index[-(layout[0]+1):])
-
 
     peak_dist = [np.abs(t - s) for s, t in zip(ordered_hp_index, ordered_hp_index[1:])]
     max_dist = int(np.round(max(peak_dist)*perc_max_dist,0))
@@ -217,16 +208,13 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     if verbose > 0 :
         print("INFO: slices: {}". format(slices_x))
 
-
     # Create a list to store the processed lines
-
     proc_line_list =[]
 
     h, w = foreground.shape
     blank_image =  np.zeros(shape=(h, w), dtype=np.uint8)
 
     # Extract and process the leads
-
     for i, slx in enumerate(slices_x): 
     
         line = foreground[slice(*slx),slice(*(0, foreground.shape[1], None))]
@@ -271,10 +259,8 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
             # #put the same baseline
             # baseline = np.argmax(np.std(line_copy, axis =1))
 
-
             # y_best = pattern_match(np.array(line_signal), np.array(template_signal+baseline),method)
             # print('DEBUG: pulse detected by template in line {} in {}'.format(i, y_best))
-
 
             # Pulse detection by template
             detected,location,  similarity_value, x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
@@ -292,8 +278,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     wpulse = wt
                     hpulse = ht
                  sliced_labeled_line = labeled_line.copy() 
-
-           
                 
             if verbose > 0:
                 if detected:
@@ -302,9 +286,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     plt.show()
                 else:
                     print('INFO: pulse NOT detected by template in line {}'.format(i))
-                    #sliced_labeled_line = labeled_line.copy() 
-           
-                
+                    #sliced_labeled_line = labeled_line.copy()             
 
         else:
             print("INFO: line {} has no pulse to detect".format(i))
@@ -319,9 +301,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         line_dict = process_line(i,sliced_labeled_line,offset,lt_leads[i], config_dict, config_dict['verbose'])
         proc_line_list.append(line_dict)
 
-
     #Print to check if everything is OK
-
     for i, line in enumerate(proc_line_list): 
         print("INFO: processing line {}".format(i))
         print_line_dict(line)
@@ -337,9 +317,9 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     return ecg_df
 
 # Main program 
-filename = 'ecg_test'
+filename = 'ecg_test2'
 image_name = filename + '.png'
-template_name = 'bucket/template.png'
+template_name = 'pul.png'
 
 csv_name = filename + '.csv'
 layout = (3,4)
