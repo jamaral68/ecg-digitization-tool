@@ -1,14 +1,13 @@
 import sys
 import cv2 as cv
 import numpy as np
-import strategy as str_module
 import setup
 from scipy import ndimage
 from matplotlib import pyplot as plt
+from strategy import color, filter, none
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg
 from scipy.signal import find_peaks
-
 
 def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
@@ -39,13 +38,13 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
 
     if strategy == 'color':
-        ret, th1, image_gray = str_module.color(image, lower, upper, thres_value)
+        ret, th1, image_gray = color(image, lower, upper, thres_value)
         
     elif strategy == 'filter':
-        ret, th1, image_gray = str_module.filter(image, kSize2d, kSize1d, thres_value)
+        ret, th1, image_gray = filter(image, kSize2d, kSize1d, thres_value)
         
     elif strategy == 'none':
-        ret, th1, image_gray = str_module.none(image, thres_value)
+        ret, th1, image_gray = none(image, thres_value)
         
     else:
         raise ValueError(f"INFO: Estratégia desconhecida: {strategy}")
@@ -65,33 +64,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     else:
         foreground = 255-th1
 
-
-    # contours, _ = cv.findContours(foreground, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-    # rectangular_contours = get_rectangular_contours(contours)
-
-    # if verbose > 1:
-    #     plt.imshow(foreground, cmap="gray")
-    #     plt.show()
-
-    # contour_image = image_gray.copy()
-
-    # # find the biggest countour (c) by the area
-    # c = max(contours, key = cv.contourArea)
-    # x_border,y_border,w_border,h_border = cv.boundingRect(c)
-    # # draw the biggest contour (c) in green
-    # cv.rectangle(contour_image,(x_border,y_border),(x_border+w_border,y_border+h_border),(0,255,0),10)
-
-    # if verbose > 1:
-    #     plt.imshow(contour_image, cmap="gray")
-    #     #TODO: add title
-    #     plt.show()
-
-
-    # # ECG image extracted from the main image
-    
-
-    # foreground  = 255-th1[y_border+BORDER_GAP:y_border+h_border-BORDER_GAP,
-    #                     x_border+BORDER_GAP:x_border+w_border-BORDER_GAP]
     if verbose > 0:
         plt.imshow(foreground, cmap = "gray")
         plt.show()
@@ -101,7 +73,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # sanity check
     if image is None:
-        print('Cannot open the template: ' + template_name)
+        print('INFO: Cannot open the template: ' + template_name)
         new_template = None
     else:
         #load template to find the pulse
@@ -135,7 +107,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # Cut the image according to the number of rows in the layout
     # slices_x is a list of tuples
-
     slices_x = [(max(0, s-max_dist), min(foreground.shape[0],s+max_dist),None) for s in ordered_hp_index]
 
     slices_y = [(0, foreground.shape[1], None) for s in ordered_hp_index]
@@ -171,31 +142,15 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
             line_signal = (labeled_line != 0) * np.uint8(255)
-            #line_signal = np.where(labeled_line == 0, 0, 255)
-
-            # plt.imshow(line_signal, cmap = "gray")
 
             #Try to detect the pulse
             line_copy = line_signal.copy()
-            #line_copy = line_copy.astype("uint8")
-
             template_width, template_height = template.shape
             line_copy_width, line_copy_height = line_copy.shape
             _, _, xt, yt = get_values_from_img(new_template)
             wt, ht = measure_extract_pulse(xt, yt, verbose=0)
             config_dict['hpulse'] = ht #default values
             config_dict['wpulse'] = wt
-
-            # pattern matching 
-            # method = 'euclidean'
-            # _,_,_,line_signal = get_values_from_img(line_copy)
-            # _,_,_,template_signal = get_values_from_img(new_template)
-
-            # #put the same baseline
-            # baseline = np.argmax(np.std(line_copy, axis =1))
-
-            # y_best = pattern_match(np.array(line_signal), np.array(template_signal+baseline),method)
-            # print('DEBUG: pulse detected by template in line {} in {}'.format(i, y_best))
 
             # Pulse detection by template
             detected,location,  similarity_value, x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
@@ -220,8 +175,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     plt.imshow(line_copy[x:x+int(template_width)+1,y:y+int(template_height)+1], cmap ="gray")
                     plt.show()
                 else:
-                    print('INFO: pulse NOT detected by template in line {}'.format(i))
-                    #sliced_labeled_line = labeled_line.copy()             
+                    print('INFO: pulse NOT detected by template in line {}'.format(i))            
 
         else:
             print("INFO: line {} has no pulse to detect".format(i))
