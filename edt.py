@@ -1,7 +1,7 @@
 import sys
 import cv2 as cv
 import numpy as np
-import strategy
+import strategy as str_module
 import setup
 from scipy import ndimage
 from matplotlib import pyplot as plt
@@ -30,7 +30,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     try:
         lt_leads, image = setup.setup_ecg(layout, pulse, rhythm, image_name)
     except Exception as e:
-        print(f"Erro na configuração do ECG: {e}")
+        print(f"INFO: Erro na configuração do ECG: {e}")
         sys.exit(1)
 
     if verbose > 1:
@@ -38,27 +38,18 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         print("INFO: Image Shape {}.".format(image.shape))
 
 
-    if strategy =='color':
-        img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
-        #Filter color to remove the grid
-        #lower=(0,0,0) # black colssor
-        #upper=(179,255,220) # dark gray
-        mask = cv.inRange(img_hsv, lower, upper)
-        result = img_hsv.copy()
-        result[mask!=255] = (255, 255, 255) # if it is not very dark set it to white
-        #Convert to gray scale
-        image = cv.cvtColor(result, cv.COLOR_HSV2BGR )
-        image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        # To binary image
-        ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY)
+    if strategy == 'color':
+        ret, th1, image_gray = str_module.color(image, lower, upper, thres_value)
+        
+    elif strategy == 'filter':
+        ret, th1, image_gray = str_module.filter(image, kSize2d, kSize1d, thres_value)
+        
+    elif strategy == 'none':
+        ret, th1, image_gray = str_module.none(image, thres_value)
+        
+    else:
+        raise ValueError(f"INFO: Estratégia desconhecida: {strategy}")
 
-    if strategy == 'filter':
-        image_gray = extract_image(image, kSize2d, kSize1d)
-        ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY) # transform to binary
-
-    if strategy == 'none':
-        image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
-        ret, th1 = cv.threshold(image_gray, thres_value, 255,cv.THRESH_BINARY) # transform to binary
 
     if verbose > 0:
         plt.imshow(image_gray, cmap="gray")
