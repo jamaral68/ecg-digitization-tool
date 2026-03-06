@@ -24,6 +24,11 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     perc_space_leads = config_dict['perc_space_leads']
     dilation = config_dict['dilation']
     perc_max_dist = config_dict['perc_max_dist']
+    
+    # ADD THESE THREE LINES - extract missing variables
+    pulse_per_sec = config_dict['pulse_per_sec']
+    pulse_per_mv = config_dict['pulse_per_mv']
+    num_sampling_points = config_dict['num_sampling_points']
 
     # Use the setup_ecg function to configure everything
     try:
@@ -71,8 +76,8 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     template_name = 'pul.png'
     template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
 
-    # sanity check
-    if image is None:
+    # CORRECTION: was checking 'image', should check 'template'
+    if template is None:
         print('INFO: Cannot open the template: ' + template_name)
         new_template = None
     else:
@@ -80,7 +85,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         _, new_template = cv.threshold(template, 127, 255, cv.THRESH_OTSU)
         new_template = (new_template != 255) * np.uint8(255)
         
-    if verbose > 2:
+    if verbose > 2 and new_template is not None:
         plt.imshow(new_template, cmap = "gray")
         plt.show()
 
@@ -139,6 +144,9 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
             print("INFO: Number of segments {} on line {}.".format(nb, i))
             display_segments('Labeled line' + str(i), labeled_line)
         
+        # Initialize wt and ht with default values before the if block
+        wt = 38  # default value
+        ht = 75  # default value
         
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
             line_signal = (labeled_line != 0) * np.uint8(255)
@@ -181,13 +189,14 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
             print("INFO: line {} has no pulse to detect".format(i))
             wpulse = wt
             hpulse = ht
+            sliced_labeled_line = labeled_line.copy()
 
         # TODO: add info in config_dict  
         config_dict['wpulse']= wpulse
         config_dict['hpulse']= hpulse
 
         # Process line
-        line_dict = process_line(i,sliced_labeled_line,offset,lt_leads[i], config_dict, config_dict['verbose'])
+        line_dict = process_line(i, sliced_labeled_line, offset, lt_leads[i], config_dict, config_dict['verbose'])
         proc_line_list.append(line_dict)
 
     #Print to check if everything is OK
@@ -200,79 +209,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         proc_line_list.pop(rhythm-1)
         
     # convert do a dataframe
-    ecg_df= segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv,num_sampling_points)
+    ecg_df = segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv, num_sampling_points)
     ecg_df.to_csv(csv_name)
 
     return ecg_df
-
-# Main program 
-filename = 'ecg_test2'
-image_name = filename + '.png'
-template_name = 'pul.png'
-
-csv_name = filename + '.csv'
-layout = (3,4)
-pulse = [0,1,2]  
-rhythm = 4 # which line has the rhythum
-verbose = 6
-mmpsec = 25 # 25 mm/seg
-mmpmv = 10 # 10 mm/mV
-pulse_width_mm = 5 # pulse width in mm
-pulse_height_mm =10  # pulse height in mm
-pulse_per_sec = pulse_width_mm/mmpsec
-pulse_per_mv= pulse_height_mm/mmpmv
-sample_frequency = 500
-time_lead = 2.5 # duratiom of the segment in seconds
-num_sampling_points = time_lead/(1/sample_frequency)
-location = 'right'
-strategy = 'none'  # It can be filter or color
-lower=(0,0,0) # black color
-upper=(179,255,220) # dark gray
-thres_value = 127
-kSize2d = 3 
-kSize1d = 3
-perc_space_leads =0.2
-dilation = 10
-perc_max_dist = 0.7 
-
-
-config_dict ={}
-config_dict['pulse'] = pulse # which lines have pulse
-config_dict['rhythm'] = rhythm # which row has the rhythm signal
-config_dict['verbose'] = verbose # 
-config_dict['mmpsec']= mmpsec
-config_dict['mmpmv']=mmpmv
-config_dict['pulse_width_mm'] = pulse_width_mm
-config_dict['pulse_height_mm'] = pulse_height_mm
-config_dict['pulse_per_sec '] = pulse_per_sec
-config_dict['pulse_per_mv'] = pulse_per_mv
-config_dict['sample_frequency'] = sample_frequency
-config_dict['time_lead'] = time_lead
-config_dict['location']= location
-config_dict['layout']=layout   # tuple with the layout    
-config_dict['pulse_width_mm']  = pulse_width_mm
-config_dict['pulse_height_mm'] = pulse_height_mm
-config_dict['pulse_per_mv']= pulse_per_mv
-config_dict['pulse_per_sec']= pulse_per_sec
-config_dict['num_sampling_points']= num_sampling_points
-config_dict['strategy'] = strategy
-config_dict['lower']= lower
-config_dict['upper']= upper
-config_dict['thres_value'] = thres_value
-config_dict['kSized2d'] = kSize2d
-config_dict['kSized1d'] = kSize1d
-config_dict['perc_space_leads'] = perc_space_leads
-config_dict['dilation'] = dilation
-config_dict['perc_max_dist'] = perc_max_dist 
-
-
-df=ecg_to_csv(image_name ,template_name, csv_name, config_dict )
-#df.plot(subplots=True, figsize=(12, 12)); plt.legend(loc='best');plt.show()
-
-# Plot in the lay out
-
-#plot_ecg(df,df.columns,csv_name, n_rows =layout[0] , n_columns = layout[1], figure_size = (20, 12))
-plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], fs = 500, figure_size = (20, 12))
-plt.show()
-
-print("THE END")
