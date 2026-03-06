@@ -24,8 +24,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     perc_space_leads = config_dict['perc_space_leads']
     dilation = config_dict['dilation']
     perc_max_dist = config_dict['perc_max_dist']
-    
-    # ADD THESE THREE LINES - extract missing variables
     pulse_per_sec = config_dict['pulse_per_sec']
     pulse_per_mv = config_dict['pulse_per_mv']
     num_sampling_points = config_dict['num_sampling_points']
@@ -40,7 +38,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     if verbose > 1:
         plt.imshow(image)
         print("INFO: Image Shape {}.".format(image.shape))
-
 
     if strategy == 'color':
         ret, th1, image_gray = color(image, lower, upper, thres_value)
