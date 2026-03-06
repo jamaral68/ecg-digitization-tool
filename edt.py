@@ -1,9 +1,9 @@
 import sys
 import cv2 as cv
 import numpy as np
-import setup
 from scipy import ndimage
 from matplotlib import pyplot as plt
+from setup import setup_ecg
 from strategy import color, filter, none
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg
@@ -32,7 +32,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # Use the setup_ecg function to configure everything
     try:
-        lt_leads, image = setup.setup_ecg(layout, pulse, rhythm, image_name)
+        lt_leads, image = setup_ecg(layout, pulse, rhythm, image_name)
     except Exception as e:
         print(f"INFO: Erro na configuração do ECG: {e}")
         sys.exit(1)
