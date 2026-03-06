@@ -25,7 +25,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     dilation = config_dict['dilation']
     perc_max_dist = config_dict['perc_max_dist']
 
-    # Usar a função setup_ecg para configurar tudo
+    # Use the setup_ecg function to configure everything
     try:
         lt_leads, image = setup.setup_ecg(layout, pulse, rhythm, image_name)
     except Exception as e:
