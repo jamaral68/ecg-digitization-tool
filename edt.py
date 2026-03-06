@@ -1,11 +1,13 @@
 import sys
 import cv2 as cv
 import numpy as np
+import strategy
 from scipy import ndimage
 from matplotlib import pyplot as plt
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_image
 from scipy.signal import find_peaks
+
 
 def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
@@ -85,6 +87,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     if verbose > 1:
         plt.imshow(image)
         print("INFO: Image Shape {}.".format(image.shape))
+
 
     if strategy =='color':
         img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
