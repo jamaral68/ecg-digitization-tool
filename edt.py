@@ -5,8 +5,8 @@ import strategy as str_module
 import setup
 from scipy import ndimage
 from matplotlib import pyplot as plt
-from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
-from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_image
+from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df
+from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg
 from scipy.signal import find_peaks
 
 
@@ -50,13 +50,10 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     else:
         raise ValueError(f"INFO: Estratégia desconhecida: {strategy}")
 
-
     if verbose > 0:
         plt.imshow(image_gray, cmap="gray")
         plt.show()
         print("INFO: gray scale image Shape {}.".format(image_gray.shape))
-
-
 
     if verbose > 2:
         plt.imshow(th1, cmap="gray")
