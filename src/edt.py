@@ -71,7 +71,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.imshow(foreground, cmap = "gray")
         plt.show()
 
-    template_name = '../pul.png'
     template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
 
     # CORRECTION: was checking 'image', should check 'template'
