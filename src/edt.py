@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 from setup import setup_ecg
 from strategy import color, filter, none
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df
-from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg
+from edt_utils import process_line,get_values_from_img,measure_extract_pulse
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse
 from scipy.signal import find_peaks
 
