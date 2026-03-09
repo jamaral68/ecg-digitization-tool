@@ -3,9 +3,9 @@ from edt_utils import plot_ecg
 from matplotlib import pyplot as plt
 
 # Main program 
-filename = 'ecg_test2'
+filename = '../ecg_test2'
 image_name = filename + '.png'
-template_name = 'pul.png'
+template_name = '../pul.png'
 
 csv_name = filename + '.csv'
 layout = (3,4)
