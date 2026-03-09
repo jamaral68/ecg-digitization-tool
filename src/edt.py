@@ -208,3 +208,5 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     # convert do a dataframe
     ecg_df = segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv, num_sampling_points)
     ecg_df.to_csv(csv_name)
+    
+    return ecg_df
