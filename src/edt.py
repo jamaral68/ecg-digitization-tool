@@ -33,7 +33,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     try:
         lt_leads, image = setup_ecg(layout, pulse, rhythm, image_name)
     except Exception as e:
-        print(f"INFO: Erro na configuração do ECG: {e}")
+        print(f"INFO: Error in ECG configuration: {e}")
         sys.exit(1)
 
     if verbose > 1:
@@ -50,7 +50,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         ret, th1, image_gray = none(image, thres_value)
 
     else:
-        raise ValueError(f"INFO: Estratégia desconhecida: {strategy}")
+        raise ValueError(f"INFO: Unknown strategy {strategy}")
 
     if verbose > 0:
         plt.imshow(image_gray, cmap="gray")
@@ -91,7 +91,6 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     median_temp = np.median(temp.flatten())
     peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=round(temp.flatten().size*perc_space_leads, 0))
     peak_heights = peak_dict['peak_heights']
-    print("IMPRIMINDO: ",temp)
 
     highest_peak_index = peak_indices[np.argsort(peak_heights)]
 
