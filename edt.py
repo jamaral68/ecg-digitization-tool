@@ -30,7 +30,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # Use the setup_ecg function to configure everything
     try:
-        lt_leads, image = setup_ecg(layout, pulse, rhythm, image_name)
+        lt_leads, image = setup_ecg(layout, pulse, rhythm, image_name, template)
     except Exception as e:
         print(f"INFO: Error in ECG configuration: {e}")
         sys.exit(1)
@@ -42,8 +42,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     if strategy == 'color':
         ret, th1, image_gray = color(image, lower, upper, thres_value)
     elif strategy == 'filter':
-        ret, th1, image_gray = filter(image, kSize2d, kSize1d, thres_value)
-        
+        ret, th1, image_gray = filter(image, kSize2d, kSize1d, thres_value)  
     elif strategy == 'none':
         ret, th1, image_gray = none(image, thres_value)
     else:

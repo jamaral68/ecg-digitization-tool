@@ -3,7 +3,7 @@ import sys
 
 def setup_ecg(layout, pulse, rhythm, image_name):
     """
-    Configuração completa para processamento de ECG
+    Complete configuration for ECG processing
     """
     
     # the names dependending on the layout
