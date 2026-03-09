@@ -71,7 +71,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.imshow(foreground, cmap = "gray")
         plt.show()
 
-    template_name = 'pul.png'
+    template_name = '../pul.png'
     template = cv.imread(template_name, cv.IMREAD_GRAYSCALE)
 
     # CORRECTION: was checking 'image', should check 'template'
@@ -92,6 +92,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     median_temp = np.median(temp.flatten())
     peak_indices, peak_dict = find_peaks(temp.flatten(), height=median_temp, distance=round(temp.flatten().size*perc_space_leads, 0))
     peak_heights = peak_dict['peak_heights']
+    print("IMPRIMINDO: ",temp)
 
     highest_peak_index = peak_indices[np.argsort(peak_heights)]
 
