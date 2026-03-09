@@ -6,6 +6,7 @@ from matplotlib import pyplot as plt
 from setup import setup_ecg
 from strategy import color, filter, none
 from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df
+from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse
 from scipy.signal import find_peaks
 
@@ -30,9 +31,9 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # Use the setup_ecg function to configure everything
     try:
-        lt_leads, image = setup_ecg(layout, pulse, rhythm, image_name, template)
+        lt_leads, image = setup_ecg(layout, pulse, rhythm, image_name)
     except Exception as e:
-        print(f"INFO: Error in ECG configuration: {e}")
+        print(f"INFO: Erro na configuração do ECG: {e}")
         sys.exit(1)
 
     if verbose > 1:
@@ -41,12 +42,15 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     if strategy == 'color':
         ret, th1, image_gray = color(image, lower, upper, thres_value)
+
     elif strategy == 'filter':
-        ret, th1, image_gray = filter(image, kSize2d, kSize1d, thres_value)  
+        ret, th1, image_gray = filter(image, kSize2d, kSize1d, thres_value)
+
     elif strategy == 'none':
         ret, th1, image_gray = none(image, thres_value)
+
     else:
-        raise ValueError(f"INFO: Unknown strategy: {strategy}")
+        raise ValueError(f"INFO: Estratégia desconhecida: {strategy}")
 
     if verbose > 0:
         plt.imshow(image_gray, cmap="gray")
@@ -78,7 +82,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         #load template to find the pulse
         _, new_template = cv.threshold(template, 127, 255, cv.THRESH_OTSU)
         new_template = (new_template != 255) * np.uint8(255)
-        
+
     if verbose > 2 and new_template is not None:
         plt.imshow(new_template, cmap = "gray")
         plt.show()
@@ -121,7 +125,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     # Extract and process the leads
     for i, slx in enumerate(slices_x): 
-    
+
         line = foreground[slice(*slx),slice(*(0, foreground.shape[1], None))]
         offset = slx # reference to locate the segment in the image
         plt.imshow(line, cmap="gray")
@@ -129,7 +133,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         structure = np.array([[1, 1, 1],
                         [1, 1, 1],
                         [1, 1, 1]], np.uint8)
-    
+
 
         labeled_line, nb = ndimage.label(line, structure=structure)
 
@@ -137,11 +141,11 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         if verbose > 0:
             print("INFO: Number of segments {} on line {}.".format(nb, i))
             display_segments('Labeled line' + str(i), labeled_line)
-        
+
         # Initialize wt and ht with default values before the if block
         wt = 38  # default value
         ht = 75  # default value
-        
+
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
             line_signal = (labeled_line != 0) * np.uint8(255)
 
@@ -170,7 +174,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     wpulse = wt
                     hpulse = ht
                  sliced_labeled_line = labeled_line.copy() 
-                
+
             if verbose > 0:
                 if detected:
                     print('INFO: pulse detected by template in line {} in {}'.format(i,y))
@@ -201,9 +205,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     #TODO remove the rhythm form the list of lines
     if config_dict['rhythm'] != 0:
         proc_line_list.pop(rhythm-1)
-        
+
     # convert do a dataframe
     ecg_df = segment_to_df(proc_line_list, pulse_per_sec, pulse_per_mv, num_sampling_points)
     ecg_df.to_csv(csv_name)
-
-    return ecg_df
