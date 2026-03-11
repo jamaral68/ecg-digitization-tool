@@ -1,5 +1,5 @@
 import matplotlib.pyplot as plt
-from edt import ecg
+from edt import ecg_to_csv
 from setup import Setup
 from edt_utils import plot_ecg
 
@@ -8,7 +8,7 @@ if __name__ == "__main__":
     image = '../ecg_test2.png'         # Path to the ECG image
     template_name = '../pul.png'       # Pulse template image
     csv_name = '../ecg_test2.csv'      # Output CSV filename
-    strategy = 'none'                  # Preprocessing strategy
+    strategy = 'none'                  # Preprocessing strategy (none/filter/color)
     thres_value = 127                  # Threshold value for binarization
     dilation = 10                      # Number of dilation iterations
     perc_space_leads = 0.2             # Percentage spacing between leads
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     )
 
     # Call the main ECG processing function
-    df = ecg(setup)
+    df = ecg_to_csv(setup)
     
     # Plot in the lay out
     plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], fs = 500, figure_size = (20, 12))

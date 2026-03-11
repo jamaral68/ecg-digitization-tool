@@ -16,8 +16,13 @@ def ecg_to_csv(config):
     plt.imshow(image)
     plt.show()
 
-    # Thresholding and grayscale conversion
-    ret, th1, image_gray = none(image, config.thres_value)
+    # Thresholding 
+    if config.strategy == 'color':
+        ret, th1, image_gray = color(image, config.lower, config.upper, config.thres_value)
+    elif config.strategy == 'filter':
+        ret, th1, image_gray = filter(image, config.kSize2d, config.kSize1d, config.thres_value)
+    elif config.strategy == 'none':
+        ret, th1, image_gray = none(image, config.thres_value)
 
     print("INFO: gray scale image Shape {}.".format(image_gray.shape))
     plt.imshow(image_gray, cmap='gray')
