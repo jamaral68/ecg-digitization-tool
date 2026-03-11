@@ -1,11 +1,22 @@
-from matplotlib import pyplot as plt
-from scipy import interpolate
-from scipy import ndimage
-import pandas as pd
+import math
 import numpy as np
 import cv2 as cv
-import pytesseract
-import math
+import matplotlib.pyplot as plt
+import pandas as pd
+from scipy import ndimage, interpolate
+
+def py_blockproc(A, blockdims, func=0):
+    vr, hr = A.shape[0] // blockdims[0], A.shape[1] // blockdims[1]
+    B = np.zeros((vr,hr))
+
+    verts = np.vsplit(A, vr)
+    for i in range(len(verts)):
+       for j, v in enumerate(np.hsplit(verts[i], hr)):
+          B[i,j]=(np.std(A[
+             i * blockdims[0] : (i + 1) * blockdims[0],
+             j * blockdims[1] : (j + 1) * blockdims[1]
+            ]))
+    return B
 
 def laplacian_filter(img, kSize=3, gSize=3, alpha=1.0):
     input_is_bgr = len(img.shape) == 3
@@ -15,100 +26,46 @@ def laplacian_filter(img, kSize=3, gSize=3, alpha=1.0):
     else:
         gray_img = img
 
-    # Gaussian blurring / low-pass filter.
+    # Gaussian blur / low-pass filter
     gauss = cv.GaussianBlur(gray_img, (gSize, gSize), 0.0)
 
-    # Edge detection / high-pass filter.
+    # Edge detection / high-pass filter
     lpl = cv.Laplacian(gauss, cv.CV_32F, ksize=kSize)
     if input_is_bgr: 
         lpl  = cv.cvtColor(lpl, cv.COLOR_GRAY2BGR)
 
-    # Image sharpening.
+    # Image sharpening
     filtered_img = img.astype("float32") - alpha * lpl
     
     return np.clip(filtered_img, 0.0, 255.0).astype("uint8")
 
-def extract_sequence(cropped_signal, kSize2d=3, kSize1d=3):
-    """
-    Based off https://github.com/alphanumericslab/ecg-image-kit.
-    """
-
-    # BGR to grayscale conversion.
-    if len(cropped_signal == 3):
-        gray_signal = cv.cvtColor(cropped_signal, cv.COLOR_BGR2GRAY)
-    else:
-        gray_signal = cropped_signal
-
-    # Image sharpening.
-    lpl_signal = laplacian_filter(gray_signal, 3, 7, 0.5)
-
-    # Simple argmin.
-    argmin_seq = lpl_signal.argmin(axis=0)
-
-    # 1D blur.
-    box1d_seq = cv.filter2D(lpl_signal, cv.CV_32F, np.ones((1, kSize1d), np.float32) / kSize1d).argmin(axis=0)
-
-    # Box blur.
-    box2d_seq = cv.filter2D(lpl_signal, cv.CV_32F, np.ones((kSize2d, kSize2d), np.float32) / (kSize2d * kSize2d)).argmin(axis=0)
-
-    # All left/right neighbors.
-    h0 = np.array([[1.0, 0.0, 1.0],
-                   [1.0, 1.0, 1.0],
-                   [1.0, 0.0, 1.0]], np.float32) / 7.0
-    lr_neigh_seq = cv.filter2D(lpl_signal, cv.CV_32F, h0).argmin(axis=0)
-
-    # All combined neighbours.    
-    h1 = np.array([1.0, 1.0, 1.0], np.float32) / 3.0
-    z1 = cv.filter2D(lpl_signal, cv.CV_32F, h1).argmin(axis=0)
-
-    h2 = np.array([[1.0, 0.0, 0.0],
-                   [0.0, 1.0, 0.0],
-                   [0.0, 0.0, 1.0]], np.float32) / 3.0
-    z2 = cv.filter2D(lpl_signal, cv.CV_32F, h2).argmin(axis=0)
-
-    h3 = np.array([[0.0, 0.0, 1.0], 
-                   [0.0, 1.0, 0.0],
-                   [1.0, 0.0, 0.0]], np.float32) / 3.0
-    z3 = cv.filter2D(lpl_signal, cv.CV_32F, h3).argmin(axis=0)
-
-    all_neigh_seq = np.maximum(np.maximum(z1, z2), z3)
-
-    output_seq = np.median([argmin_seq,
-                            box1d_seq,
-                            box2d_seq,
-                            lr_neigh_seq,
-                            all_neigh_seq
-                            ], axis=0)
-    return output_seq
-
 def extract_image(cropped_img, kSize2d=3, kSize1d=3):
     """
-    Based off https://github.com/alphanumericslab/ecg-image-kit.
+    Based on https://github.com/alphanumericslab/ecg-image-kit.
     """
 
-    # BGR to grayscale conversion.
+    # Convert BGR to grayscale
     if len(cropped_img == 3):
         gray_img = cv.cvtColor(cropped_img, cv.COLOR_BGR2GRAY)
     else:
         gray_img = cropped_img
 
-    # Image sharpening.
+    # Image sharpening
     lpl_img = laplacian_filter(gray_img, 3, 7, 0.5)
 
-    
-    # 1D blur.
+    # 1D blur
     box1d_img = cv.filter2D(lpl_img, cv.CV_32F, np.ones((1, kSize1d), np.float32) / kSize1d)
 
-    # Box blur.
+    # 2D blur
     box2d_img = cv.filter2D(lpl_img, cv.CV_32F, np.ones((kSize2d, kSize2d), np.float32) / (kSize2d * kSize2d))
 
-    # All left/right neighbors.
+    # All left/right neighbors
     h0 = np.array([[1.0, 0.0, 1.0],
                    [1.0, 1.0, 1.0],
                    [1.0, 0.0, 1.0]], np.float32) / 7.0
     lr_neigh_img = cv.filter2D(lpl_img, cv.CV_32F, h0)
 
-    # All combined neighbours.    
+    # All combined neighbors    
     h1 = np.array([1.0, 1.0, 1.0], np.float32) / 3.0
     z1 = cv.filter2D(lpl_img, cv.CV_32F, h1)
 
@@ -131,54 +88,17 @@ def extract_image(cropped_img, kSize2d=3, kSize1d=3):
                             all_neigh_img
                             ], axis=0)
     
+    # Normalize the output image to 0-255
     output_img = cv.normalize(output_img, None, 255, 0, cv.NORM_MINMAX, cv.CV_8U)
     return output_img
 
-def is_nan(value):
-    try:
-        return math.isnan(float(value))
-    except ValueError:
-        return False
-
-def get_rectangular_contours(contours):
-    """Approximates provided contours and returns only those which have 4 vertices"""
-    res = []
-    for contour in contours:
-        hull = cv.convexHull(contour)
-        peri = cv.arcLength(hull, closed=True)
-        approx = cv.approxPolyDP(hull, 0.04 * peri, closed=True)
-        if len(approx) == 4:
-            res.append(approx)
-    return res
-
-def py_blockproc(A, blockdims, func=0):
-    vr, hr = A.shape[0] // blockdims[0], A.shape[1] // blockdims[1]
-    B = np.zeros((vr,hr))
-
-    verts = np.vsplit(A, vr)
-    for i in range(len(verts)):
-       for j, v in enumerate(np.hsplit(verts[i], hr)):
-          B[i,j]=(np.std(A[
-             i * blockdims[0] : (i + 1) * blockdims[0],
-             j * blockdims[1] : (j + 1) * blockdims[1]
-            ]))
-    return B
-
-def display_segments(name, item, axis='off'):
-    plt.figure(figsize=(12, 9))
-    plt.imshow(item, cmap="magma")
-    plt.title(name)
-    plt.axis(axis)
-    plt.subplots_adjust(wspace=0.05, left=0.01, bottom=0.01, right=0.99, top=0.9)
-    plt.show()
-
 def get_values_from_img(roi):
     '''
-    get the values of coord x and y for the image that contain the signal
+    Get the x and y coordinates of the image containing the signal
     INPUT:
         roi: binary image with signal in white
     OUTPUT:
-        xs, ys: values of the signal
+        xs, ys: signal values
     '''
     def find_nearest(array, value):
         array = np.asarray(array)
@@ -228,37 +148,18 @@ def measure_extract_pulse(x, y, verbose=0):
         print(f"pulse width: {width} time units")
     return width, height
 
-def convert_to_secmv(xs, ys, wp, hp, ws, baseline, pulse_per_sec, pulse_per_mv):
-    '''
-    INPUTS:
-        xs: x-axis in pts
-        ys: y-axis in pts
-        wp: pulse width in pts
-        hp: pulse height in pts
-        baseline: segment baseline in pts
-        ws:  segment width in pts
-    '''
-    zero_line = ws - baseline
-    ymv = (ys - zero_line) / (hp * pulse_per_mv)
-    sec_per_pts = (pulse_per_sec / wp)
-    xsec = sec_per_pts * np.asarray(xs)
-    return xsec, ymv
-
 def detect_ref_pulse(roi, template,location='right', threshold=0.6, verbose=2):
     '''
+    Detects a reference pulse using template matching
     '''
     if roi.shape[0] <= template.shape[0] or roi.shape[1] <= template.shape[1]:
-        #template is bigger than roi. Can not perform matchTemplate
-
+        # template is bigger than ROI. Cannot perform matchTemplate
         empty_list=[]
         empty_array = np.array(empty_list)
         loc = (empty_array,empty_array )
     else:
         method = cv.TM_CCORR_NORMED
-        res = cv.matchTemplate(roi,template,method) # try tofind the pulse using a template match
-        # Getting the max
-        # x, y = np.unravel_index(np.argmax(res), res.shape)
-        # print("INFO: max correlation is {} in x = {} and y = {}.".format(np.max(res),x,y))
+        res = cv.matchTemplate(roi,template,method) # try to find the pulse using template
 
         min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
 
@@ -275,9 +176,8 @@ def detect_ref_pulse(roi, template,location='right', threshold=0.6, verbose=2):
             y = top_left[0]
             similarity_value = max_val
             print("INFO: max similarity value is {} in x = {} and y = {}.".format(max_val,x,y))
-        #bottom_right = (top_left[0] + w, top_left[1] + h)
 
-        #TODO check if it is necessary
+        # TODO: check if necessary
         x = top_left[1]
         y = top_left[0]
 
@@ -287,36 +187,158 @@ def detect_ref_pulse(roi, template,location='right', threshold=0.6, verbose=2):
             rect = plt.Rectangle((y, x), template_height, template_width, color='red',
                     fc='none')
             plt.gca().add_patch(rect)
-            plt.title('Grayscale Image with Bounding Box around the pulse')
+            plt.title('Grayscale image with bounding box around the pulse')
             plt.show()
 
         loc = np.where(res >= threshold)
 
     if len(loc[0])>0:
-        detected = True # pulse was detected
+        detected = True # pulse detected
 
-        ppts = np.array(list(map(list, zip(*loc[::-1])))) #obtain um array from the list of tuples
-        #print(ppts)
+        ppts = np.array(list(map(list, zip(*loc[::-1])))) # obtain array from list of tuples
+
         ppts_max = ppts[:,0].max()
         ppts_min = ppts[:,0].min()
         ppts_median = np.median(ppts[:,0])
-        #print(ppts_max, ppts_median, ppts_min)
 
         extracted_pulse = roi[x:x+template_width, y:y+template_height]
-        # plt.imshow(extracted_pulse)
-        # plt.show()
         _,_,xpulse,ypulse= get_values_from_img(extracted_pulse)
         wpulse,hpulse = measure_extract_pulse(xpulse,ypulse)
 
     else:
-              # There was a pulse to be detected but the detection failed
-              # No pulse detected or the roi has no pulse
+              # No pulse detected or ROI has no pulse
               detected = False
-              #curve_scales.append((np.nan,np.nan))
               wpulse = np.nan
               hpulse = np.nan
 
-    return detected, location, similarity_value, x, y, wpulse, hpulse,
+    return detected, location, similarity_value, x, y, wpulse, hpulse
+
+def display_segments(name, item, axis='off'):
+    plt.figure(figsize=(12, 9))
+    plt.imshow(item, cmap="magma")
+    plt.title(name)
+    plt.axis(axis)
+    plt.subplots_adjust(wspace=0.05, left=0.01, bottom=0.01, right=0.99, top=0.9)
+    plt.show()
+
+def process_line(line_number, labeled_line, offset, line_leads, config_dict, verbose):
+    """
+    Process a labeled ECG line, segmenting it into individual curves
+    and calculating width, height, and baseline information for each segment.
+    """
+
+    # Dictionary to store line information
+    line_dict = {}
+    line_dict['wpulse'] = config_dict.wpulse
+    line_dict['hpulse'] = config_dict.hpulse
+    line_dict['curves'] = []
+    line_dict['offset_line'] = offset
+
+    display_title = "Labeled Line " + str(line_number)
+    display_segments(display_title, labeled_line)
+
+    u, c = np.unique(labeled_line, return_counts=True)
+    segment_labels = np.argsort(-c[1:]) + 1  # sort labels by segment size (descending)
+    segment_length = -np.sort(-c[1:])
+    max_label = np.max(u)
+
+    app_seg_size = labeled_line.shape[1] // config_dict.layout[1]
+
+    if verbose > 1:
+        print("INFO: unique labels: ", u)
+        print("INFO: counts: ", c)
+        print("INFO: segment labels: ", segment_labels)
+        print("INFO: segment lengths: ", segment_length)
+
+    temp = np.round(app_seg_size * 0.25, 0)
+
+    # Iterate over all detected labels
+    for label in segment_labels:
+        roi = (labeled_line == label)
+        sl = ndimage.find_objects(roi)
+
+        if len(sl) == 0:
+            continue
+
+        roi = roi[sl[0][0], sl[0][1]]
+        roi_length = roi.shape[1]
+
+        if roi_length < temp:
+            continue
+
+        roi_copy = roi.astype(np.uint8) * 255
+
+        # Calculate the ratio between segment length and approximate segment size
+        ratio = round(roi_length / app_seg_size, 0)
+        if verbose > 0:
+            print(f"INFO: label={label}, length={roi_copy.shape[1]}, ratio={ratio}")
+
+        # Ignore the rhythm line
+        if line_number + 1 == config_dict.rhythm:
+            continue
+
+        # Internal function to create a segment dictionary
+        def create_segment(start_x, stop_x, start_y, stop_y, seg_label):
+            segment_dict = {
+                'line': line_number,
+                'label': seg_label,
+                'start_x': start_x,
+                'stop_x': stop_x,
+                'start_y': start_y,
+                'stop_y': stop_y
+            }
+            seg = labeled_line[start_x:stop_x, start_y:stop_y]
+            seg = np.where(seg == label, 255, 0)
+
+            ws, ls, xs, ys = get_values_from_img(seg)
+            segment_dict['wseg'] = ws
+            segment_dict['lseg'] = ls
+            segment_dict['xseg'] = xs
+            segment_dict['yseg'] = ys
+            segment_dict['baseline'] = np.argmax(np.std(seg, axis=1))
+
+            return segment_dict
+
+        # Split segments according to the ratio
+        if ratio >= 4:
+            if verbose > 0:
+                print("INFO: Four or more segments detected")
+        elif ratio == 3:
+            # Split into 3 segments
+            x_start, x_stop = sl[0][0].start, sl[0][0].stop
+            y_start, y_stop = sl[0][1].start, sl[0][1].stop
+            step = (y_stop - y_start) // 3
+            for i in range(3):
+                seg = create_segment(x_start, x_stop, y_start + i*step, y_start + (i+1)*step if i<2 else y_stop, max_label)
+                line_dict['curves'].append(seg)
+                max_label += 1
+        elif ratio == 2:
+            # Split into 2 segments
+            x_start, x_stop = sl[0][0].start, sl[0][0].stop
+            y_start, y_stop = sl[0][1].start, sl[0][1].stop
+            step = (y_stop - y_start) // 2
+            for i in range(2):
+                seg = create_segment(x_start, x_stop, y_start + i*step, y_start + (i+1)*step if i<1 else y_stop, max_label)
+                line_dict['curves'].append(seg)
+                max_label += 1
+        elif ratio == 1:
+            # Only one segment
+            seg = create_segment(sl[0][0].start, sl[0][0].stop, sl[0][1].start, sl[0][1].stop, label)
+            line_dict['curves'].append(seg)
+
+    # Sort segments by y-position and add lead names
+    line_dict['curves'] = sorted(line_dict['curves'], key=lambda d: d['start_y'])
+    for i, d in enumerate(line_dict['curves']):
+        if i < len(line_leads):
+            d['name'] = line_leads[i]
+
+    return line_dict
+
+def is_nan(value):
+    try:
+        return math.isnan(float(value))
+    except ValueError:
+        return False
 
 def print_segment_list(segment_list):
      for seg in segment_list:
@@ -334,6 +356,22 @@ def print_line_dict(line):
       else:
           print(f"{key}: {value}")
 
+def convert_to_secmv(xs, ys, wp, hp, ws, baseline, pulse_per_sec, pulse_per_mv):
+    '''
+    INPUTS:
+        xs: x-axis in points
+        ys: y-axis in points
+        wp: pulse width in points
+        hp: pulse height in points
+        baseline: segment baseline in points
+        ws: segment width in points
+    '''
+    zero_line = ws - baseline
+    ymv = (ys - zero_line) / (hp * pulse_per_mv)
+    sec_per_pts = (pulse_per_sec / wp)
+    xsec = sec_per_pts * np.asarray(xs)
+    return xsec, ymv
+
 def interpolate_segment(x, y, num):
      x_interp = np.linspace(0.0, 1.0, len(x))
      f = interpolate.CubicSpline(x_interp, y)
@@ -347,12 +385,11 @@ def segment_to_df(line_list, pulse_per_sec, pulse_per_mv,num_pts):
     line_list
     pulse_per_sec
     pulse_per_mv
-    num_pts: number of points after the interpolation
+    num_pts: number of points after interpolation
     '''
     df = pd.DataFrame()
 
-    #Check if at least one line 
-
+    # Check if there is at least one line
     for line in line_list:
         for seg in (line['curves']):
             xsec, ymv= convert_to_secmv(seg['xseg'], seg['yseg'], line['wpulse'],
@@ -362,414 +399,9 @@ def segment_to_df(line_list, pulse_per_sec, pulse_per_mv,num_pts):
             df[seg['name']] = y_new
     return df
 
-def remove_text(image, confidence_threshold):
-    image_copy = image.copy()
-    results = pytesseract.image_to_data(image_copy, config='--psm 11', output_type='dict')
-
-    for i in range(len(results["text"])):
-        # extract the bounding box coordinates of the text region from
-        # the current result
-        x = results["left"][i]
-        y = results["top"][i]
-        w = results["width"][i]
-        h = results["height"][i]
-        # Extract the confidence of the text
-        conf = int(results["conf"][i])
-
-        if conf > 100 * confidence_threshold: # adjust to your liking
-            # Cover the text with a black rectangle
-            print("INFO: word detect in the image")
-            cv.rectangle(image_copy, (x, y), (x + w, y + h), (0, 0, 0), -1)
-    return image_copy
-
-def process_line(line_number, labeled_line, offset, line_leads, config_dict, verbose=0):
-    '''
-    '''
-    # TODO: Clean this dictionary
-    line_dict ={}
-    line_dict['wpulse'] = config_dict['wpulse']
-    line_dict['hpulse'] = config_dict['hpulse']
-    line_dict['curves'] = []
-    line_dict['offset_line'] = offset
-
-
-    display_title = "Labeled Line" + str(line_number)
-    display_segments(display_title, labeled_line)
-
-    # if verbose > 1:
-    #      display_segments("Labeled Line", labeled_line)
-
-    u, c = np.unique(labeled_line, return_counts=True)
-    segment_labels = np.argsort(-c[1:]) +1 # sort label by segment size in decresent order
-    segment_length = -np.sort(-c[1:])
-    max_label = np.max(u)
-
-
-    app_seg_size = labeled_line.shape[1] // config_dict['layout'][1]
-    if verbose > 1:
-        print("INFO: unique label {}.".format(u))
-        print("INFO: count {}.".format(c))
-        print("INFO: segment labels {}.".format(segment_labels))
-        print("INFO: segment lenghth {}.".format(segment_length))
-
-    larger_segments = segment_labels[:config_dict['layout'][1] + 1]
-
-    segment_ratios = []
-   
-    temp = np.round(app_seg_size * 0.25, 0)
-    
-    for l, label in enumerate(segment_labels):
-        
-        #print ("INFO: label count  = {}.".format(c[label]))
-
-
-        roi = (labeled_line==label)
-       
-        sl = ndimage.find_objects(roi)
-        if len(sl)==0:
-            continue
-        #print ("INFO: sl  = {}.".format(sl))
-        roi = roi[sl[0][0], sl[0][1]] # slice in x and slice in y
-        #print ("INFO: label count  = {}.".format(c[label]))
-        roi_length = roi.shape[1]
-        #print(roi_length)
-        if roi_length >= temp:
-            #roi_copy = (roi == label) * np.uint8(255) #np.where(roi == label, 255, 0).astype("uint8")
-            roi_copy = (roi) * np.uint8(255)
-
-            # calculate the ratio between length and approximate segment size
-            # to check if teh segmentation concatenate 2 ou more segments
-            ratio = round(roi_length / app_seg_size, 0) # calculate the ratio between length and appromate segment
-
-
-            if verbose > 0:
-                print("INFO: label = {}, length = {} and ratio = {}.".format(label, roi_copy.shape[1], ratio))
-                # plt.imshow(roi_copy)
-                # plt.show()
-
-            ratio = round(roi_length / app_seg_size, 0)
-            segment_ratios.append(ratio)
-
-            if line_number + 1 == config_dict['rhythm']: # line number : 0,1,...
-            #discard rhythm
-                pass
-            elif ratio == 4.0:
-                print("INFO: Four Segments {}.".format(ratio))
-                print("INFO:Slice X = {} and Slice Y =  {}" .format(sl[0][0], sl[0][1]))
-            elif ratio == 3.0:
-                print("INFO: Three Segments {}.".format(ratio))
-                print("INFO:Slice X = {} and Slice Y =  {}" .format(sl[0][0], sl[0][1]))
-
-                # Separate the segments
-
-                # First segment
-                slx_seg1_start = sl[0][0].start
-                slx_seg1_stop = sl[0][0].stop
-                sly_seg1_start = sl[0][1].start
-                sly_seg1_stop = sl[0][1].start + ((sl[0][1].stop -sl[0][1].start) // 3)
-
-                # append segment to the segment list
-                segment_dict = {}
-                segment_dict['line'] = line_number
-                segment_dict['label'] = label
-                segment_dict['start_x'] = slx_seg1_start
-                segment_dict['stop_x'] = slx_seg1_stop
-                segment_dict['start_y'] = sly_seg1_start
-                segment_dict['stop_y'] = sly_seg1_stop
-
-                #Take the slice from the labeled line
-                seg = labeled_line[slice(*(segment_dict['start_x'], segment_dict['stop_x'], None)),
-                               slice(*(segment_dict['start_y'], segment_dict['stop_y'], None))]
-
-                seg = np.where(seg == label, 255, 0)
-                #seg = seg.astype("uint8")
-
-            
-                ws, ls, xs, ys= get_values_from_img(seg)
-                segment_dict['wseg'] = ws
-                segment_dict['lseg'] = ls
-                segment_dict['xseg'] = xs
-                segment_dict['yseg'] = ys
-
-                baseline = np.argmax(np.std(seg, axis=1))
-                segment_dict['baseline'] = baseline
-
-                line_dict['curves'].append(segment_dict)
-
-                print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict['lseg']))
-
-                # Second Segment
-                slx_seg2_start = sl[0][0].start
-                slx_seg2_stop =  sl[0][0].stop
-                sly_seg2_start = sl[0][1].start + ((sl[0][1].stop -sl[0][1].start)//3)
-                sly_seg2_stop = sl[0][1].start + ((sl[0][1].stop - sl[0][1].start)//3) + ((sl[0][1].stop -sl[0][1].start)//3)
-                max_label = max_label+1 # add a new label
-
-                # append segment to the segment list
-                segment_dict = {}
-                segment_dict['line'] = line_number
-                segment_dict['label'] = max_label
-                segment_dict['start_x'] = slx_seg2_start
-                segment_dict['stop_x'] = slx_seg2_stop
-                segment_dict['start_y'] = sly_seg2_start
-                segment_dict['stop_y'] = sly_seg2_stop
-
-                #Take the slice from the labeled line
-                seg = labeled_line[slice(*(segment_dict['start_x'], segment_dict['stop_x'], None)),
-                               slice(*(segment_dict['start_y'], segment_dict['stop_y'], None))]
-
-                seg = np.where(seg == label, 255, 0)
-                #seg = seg.astype("uint8")
-
-                if verbose > 0 :
-                    title = "line: " + str(line_number) + "segment: " + str(label)
-                    plt.imshow(seg)
-                    plt.title(title)
-                    plt.show()
-
-                ws, ls, xs, ys= get_values_from_img(seg)
-                segment_dict['wseg'] = ws
-                segment_dict['lseg'] = ls
-                segment_dict['xseg'] = xs
-                segment_dict['yseg'] = ys
-
-                baseline = np.argmax(np.std(seg, axis =1))
-                segment_dict['baseline'] = baseline
-
-                line_dict['curves'].append(segment_dict)
-
-                print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict['lseg']))
-
-                max_label = max_label + 1
-
-                # Third Segment
-                slx_seg3_start = sl[0][0].start
-                slx_seg3_stop = sl[0][0].stop
-                sly_seg3_start = sl[0][1].start + ((sl[0][1].stop -sl[0][1].start) // 3) + ((sl[0][1].stop -sl[0][1].start)//3)
-                sly_seg3_stop = sl[0][1].stop
-
-                max_label = max_label   #add new label
-                # append segment to the segment list
-                segment_dict = {}
-                segment_dict['line'] = line_number
-                segment_dict['label'] = max_label
-                segment_dict['start_x'] = slx_seg3_start
-                segment_dict['stop_x'] = slx_seg3_stop
-                segment_dict['start_y'] = sly_seg3_start
-                segment_dict['stop_y'] = sly_seg3_stop
-
-                #Take the slice from the labeled line
-                seg = labeled_line[slice(*(segment_dict['start_x'], segment_dict['stop_x'], None)),
-                                slice(*(segment_dict['start_y'], segment_dict['stop_y'], None))]
-
-                seg = np.where(seg==label,255,0)
-                #seg = seg.astype("uint8")
-
-                if verbose > 0 :
-                    title = "line: " + str(line_number) + "segment: " + str(label)
-                    plt.imshow(seg)
-                    plt.title(title)
-                    plt.show()
-
-                # get the x,y values from the image
-                ws, ls, xs, ys= get_values_from_img(seg)
-                segment_dict['wseg'] = ws
-                segment_dict['lseg'] = ls
-                segment_dict['xseg'] = xs
-                segment_dict['yseg'] = ys
-
-
-                baseline = np.argmax(np.std(seg, axis=1))
-                segment_dict['baseline'] = baseline
-
-                line_dict['curves'].append(segment_dict)
-
-                print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict['lseg']))
-            elif ratio == 2.0:
-                print("INFO: two  segments {} Slice X = {} and Slice Y =  {}" .format(ratio, sl[0][0], sl[0][1]) )
-
-                # Separate the segments
-
-                # First segment
-                slx_seg1_start = sl[0][0].start
-                slx_seg1_stop = sl[0][0].stop
-                sly_seg1_start = sl[0][1].start
-                sly_seg1_stop = sl[0][1].start + ((sl[0][1].stop -sl[0][1].start)//2)
-
-                # append segment to the segment list
-                segment_dict = {}
-                segment_dict['line'] = line_number
-                segment_dict['label'] = label
-                segment_dict['start_x'] = slx_seg1_start
-                segment_dict['stop_x'] = slx_seg1_stop
-                segment_dict['start_y'] = sly_seg1_start
-                segment_dict['stop_y'] = sly_seg1_stop
-
-                #Take the slice from the labeled line
-                seg = labeled_line[slice(*(segment_dict['start_x'], segment_dict['stop_x'], None)),
-                                slice(*(segment_dict['start_y'], segment_dict['stop_y'], None))]
-
-                seg = np.where(seg == label, 255, 0)
-                #seg = seg.astype("uint8")
-
-                if verbose > 0 :
-                    title = "line: " + str(line_number) + " segment: " + str(label)
-                    plt.imshow(seg)
-                    plt.title(title)
-                    plt.show()
-
-                ws, ls, xs, ys= get_values_from_img(seg)
-                segment_dict['wseg'] = ws
-                segment_dict['lseg'] = ls
-                segment_dict['xseg'] = xs
-                segment_dict['yseg'] = ys
-
-                baseline = np.argmax(np.std(seg, axis=1))
-                segment_dict['baseline'] = baseline
-
-                line_dict['curves'].append(segment_dict)
-
-                print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict['lseg']))
-
-                # Second segments
-                slx_seg2_start = sl[0][0].start
-                slx_seg2_stop = sl[0][0].stop
-                sly_seg2_start = sl[0][1].start + ((sl[0][1].stop - sl[0][1].start)//2)
-                sly_seg2_stop = sl[0][1].stop
-
-                max_label = max_label + 1
-
-                # append segment to the segment list
-                segment_dict = {}
-                segment_dict['line'] = line_number
-                segment_dict['label'] = max_label
-                segment_dict['start_x'] = slx_seg2_start
-                segment_dict['stop_x'] = slx_seg2_stop
-                segment_dict['start_y'] = sly_seg2_start
-                segment_dict['stop_y'] = sly_seg2_stop
-
-                #Take the slice from the labeled line
-                seg = labeled_line[slice(*(segment_dict['start_x'], segment_dict['stop_x'], None)),
-                                slice(*(segment_dict['start_y'], segment_dict['stop_y'], None))]
-
-                seg = np.where(seg == label, 255, 0)
-                # seg = seg.astype("uint8")
-
-                if verbose > 0 :
-                    title = "line: "+ str(line_number) + " segment : " + str(label)
-                    plt.imshow(seg)
-                    plt.title(title)
-                    plt.show()
-
-                ws, ls, xs, ys= get_values_from_img(seg)
-                segment_dict['wseg'] = ws
-                segment_dict['lseg'] = ls
-                segment_dict['xseg'] = xs
-                segment_dict['yseg'] = ys
-
-                baseline = np.argmax(np.std(seg, axis =1))
-                segment_dict['baseline'] = baseline
-
-                line_dict['curves'].append(segment_dict)
-
-                print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict['lseg']))
-
-            elif ratio == 1.0:
-                print("INFO: One Segment {}.".format(ratio))
-                print("INFO:Slice X = {} and Slice Y =  {}" .format(sl[0][0], sl[0][1]) )
-
-                slx_seg1_start = sl[0][0].start
-                slx_seg1_stop = sl[0][0].stop
-                sly_seg1_start = sl[0][1].start
-                sly_seg1_stop = sl[0][1].stop
-
-
-                # append segment to the segment list
-
-                #segment_dict = fill_slice_info(line_number,label, slx_seg1_start, slx_seg1_stop,sly_seg1_start, sly_seg1_stop)
-                segment_dict = {}
-                segment_dict['line'] = line_number
-                segment_dict['label'] = label
-                segment_dict['start_x'] = slx_seg1_start
-                segment_dict['stop_x'] = slx_seg1_stop
-                segment_dict['start_y'] = sly_seg1_start
-                segment_dict['stop_y'] = sly_seg1_stop
-
-                #Take the slice from the labeled line
-                seg = labeled_line[slice(*(segment_dict['start_x'], segment_dict['stop_x'], None)),
-                                slice(*(segment_dict['start_y'], segment_dict['stop_y'], None))]
-
-                seg = np.where(seg == label, 255, 0)
-
-                if verbose > 0:
-                    title = "line: " + str(line_number) + " segment: " + str(label)
-                    plt.imshow(seg)
-                    plt.title(title)
-                    plt.show()
-
-                ws, ls, xs, ys= get_values_from_img(seg)
-                segment_dict['wseg'] = ws
-                segment_dict['lseg'] = ls
-                segment_dict['xseg'] = xs
-                segment_dict['yseg'] = ys
-                
-                segment_dict['firstpixel_abs_y'] = np.argmax(seg[:,0]) + segment_dict['start_x'] + ys[0]
-
-                baseline = np.argmax(np.std(seg, axis =1))
-                segment_dict['baseline'] = baseline
-
-                print("INFO: label: {}  length {}".format(segment_dict['label'], segment_dict['lseg']))
-
-                line_dict['curves'].append(segment_dict)
-
-            elif ratio < 1.0:
-                    dummy = 0 
-                    #print("INFO: Garbage {}.".format(ratio))
-                    continue
-        else:
-            dummy = 0
-            #print("INFO: Garbage length {} label  {} {}.".format(roi_length, label, l))
-            
-    line_dict['curves'] = sorted(line_dict['curves'], key=lambda d: d['start_y'])
-    for i, d in enumerate(line_dict['curves']):
-        d['name'] = line_leads[i]  #add  the name of the segments
-    return line_dict
-
-# def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, x_spacing = 100, y_spacing = 0.1, figure_size = (20, 12)):
-#     if (n_rows * n_columns) < len(columns):
-#         raise Exception('Columns must be the equal or smaller than the number of rows and columns.')
-#     fig, axes = plt.subplots(n_rows, n_columns, figsize = figure_size)
-#     fig.suptitle(title,fontsize = 20)
-    
-#     for index,col in enumerate(columns):
-        
-#         if n_rows == 1 or n_columns == 1:
-#             current_ax = axes[index]
-#         else:
-#             row_index = int(index/n_columns)
-#             col_index = int(index - n_columns*row_index)
-#             ax = axes[row_index][col_index]
-        
-        
-#         ax.plot(df[col]) 
-#         ax.set_title(col)
-#         #y_ticks = np.linspace(df[col].min(),df[col].max(),10)
-#         y_ticks = np.arange(df[col].min(),df[col].max(),y_spacing)
-#         ax.set_yticks(y_ticks)
-#         x_max = len(df[col].values)
-#         #x_ticks = np.linspace(0,x_max,10, endpoint= False)
-#         x_ticks =list(range(0,x_max,x_spacing))
-#         ax.tick_params(axis='x', rotation=90)
-#         ax.set_xticks(x_ticks)
-#         #label = r'$\mu={:2.2f},\ \sigma={:2.2f},\ median={:2.2f},\ mode={:2.2f}$'.format(df[col].mean(),df[col].std(),df[col].median(),df[col].mode().values[0])
-#         #ax.set_xlabel(label)
-#         ax.grid(True)
-#     plt.subplots_adjust(top=0.92,hspace = 0.45,wspace = 0.5)    
-#     plt.show()
-
 def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, fs = 500, figure_size = (20, 12)):
     if (n_rows * n_columns) < len(columns):
-        raise Exception('Columns must be the equal or smaller than the number of rows and columns.')
+        raise Exception('Columns must be equal to or smaller than the number of rows and columns.')
     fig, axes = plt.subplots(n_rows, n_columns, figsize = figure_size)
     fig.suptitle(title,fontsize = 20)
     
@@ -782,10 +414,6 @@ def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, fs = 500, figure_size 
             col_index = int(index - n_columns*row_index)
             ax = axes[row_index][col_index]
             
-        
-        
-        # ax.plot(df[col]) 
-        # ax.set_title(col)
         signal = df[col]
         ts = np.arange(signal.size) / fs
 
@@ -796,20 +424,18 @@ def plot_ecg(df,columns,title, n_rows = 4, n_columns = 4, fs = 500, figure_size 
     return fig
 
 def plot_ecg_signal(time, signal,ax):
-    #fig = plt.figure(figsize=(15, 3));
-    # ax = plt.axes();
-    ax.plot(time, signal);
+    ax.plot(time, signal)
     # setup major and minor ticks
     min_t = int(np.min(time))
     max_t = round(np.max(time))
     major_ticks = np.arange(min_t, max_t+1)
     ax.set_xticks(major_ticks)
-    # Turn on the minor ticks on
+    # Turn on minor ticks
     ax.minorticks_on()
-    # Make the major grid
+    # Major grid
     ax.grid(which='major', linestyle='-', color='red', linewidth='1.0')
-    # Make the minor grid
+    # Minor grid
     ax.grid(which='minor', linestyle=':', color='black', linewidth='0.5')
-    plt.xlabel('Time (sec)');
+    plt.xlabel('Time (sec)')
     plt.ylabel('Amplitude')
     return ax
