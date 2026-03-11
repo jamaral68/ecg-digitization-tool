@@ -1,68 +1,71 @@
-from edt import ecg_to_csv
+import matplotlib.pyplot as plt
+from edt import ecg
+from setup import Setup
 from edt_utils import plot_ecg
-from matplotlib import pyplot as plt
 
-# Main program 
-filename = '../ecg_test2'
-image_name = filename + '.png'
-template_name = '../pul.png'
+if __name__ == "__main__":
 
-csv_name = filename + '.csv'
-layout = (3,4)
-pulse = [0,1,2]  
-rhythm = 4 # which line has the rhythum
-verbose = 6
-mmpsec = 25 # 25 mm/seg
-mmpmv = 10 # 10 mm/mV
-pulse_width_mm = 5 # pulse width in mm
-pulse_height_mm = 10  # pulse height in mm
-pulse_per_sec = pulse_width_mm/mmpsec
-pulse_per_mv= pulse_height_mm/mmpmv
-sample_frequency = 500
-time_lead = 2.5 # duratiom of the segment in seconds
-num_sampling_points = time_lead/(1/sample_frequency)
-location = 'right'
-strategy = 'none'  # color | filter | none
-lower=(0,0,0) # black color
-upper=(179,255,220) # dark gray
-thres_value = 127
-kSize2d = 3 
-kSize1d = 3
-perc_space_leads =0.2
-dilation = 10
-perc_max_dist = 0.7 
+    image = '../ecg_test2.png'         # Path to the ECG image
+    template_name = '../pul.png'       # Pulse template image
+    csv_name = '../ecg_test2.csv'      # Output CSV filename
+    strategy = 'none'                  # Preprocessing strategy
+    thres_value = 127                  # Threshold value for binarization
+    dilation = 10                      # Number of dilation iterations
+    perc_space_leads = 0.2             # Percentage spacing between leads
+    layout = (3, 4)                    # ECG layout: rows x columns
+    perc_max_dist = 0.7                # Maximum distance percentage for line slicing
+    rhythm = 4                         # Which line has the rhythm
+    pulse = [0, 1, 2]                  # Lines that have pulses
+    pulse_width_mm = 5                  # Pulse width in mm
+    pulse_height_mm = 10                # Pulse height in mm
+    mmpsec = 25                         # mm per second (time scaling)
+    mmpmv = 10                          # mm per mV (voltage scaling)
+    pulse_per_sec = pulse_width_mm / mmpsec
+    pulse_per_mv = pulse_height_mm / mmpmv
+    sample_frequency = 500              # Sampling frequency in Hz
+    time_lead = 2.5                     # Duration of the segment in seconds
+    num_sampling_points = time_lead / (1 / sample_frequency)
+    location = 'right'                  # Location of the reference pulse
+    verbose = 6                         # Verbose level for debugging
+    lower = (0, 0, 0)                   # Lower color threshold (black)
+    upper = (179, 255, 220)             # Upper color threshold (dark gray)
+    kSize2d = 3                          # Kernel size for 2D filters
+    kSize1d = 3                          # Kernel size for 1D filters
 
-config_dict ={}
-config_dict['pulse'] = pulse # which lines have pulse
-config_dict['rhythm'] = rhythm # which row has the rhythm signal
-config_dict['verbose'] = verbose 
-config_dict['mmpsec']= mmpsec
-config_dict['mmpmv']=mmpmv
-config_dict['pulse_width_mm'] = pulse_width_mm
-config_dict['pulse_height_mm'] = pulse_height_mm
-config_dict['pulse_per_sec'] = pulse_per_sec
-config_dict['pulse_per_mv'] = pulse_per_mv
-config_dict['sample_frequency'] = sample_frequency
-config_dict['time_lead'] = time_lead
-config_dict['location']= location
-config_dict['layout']=layout   # tuple with the layout    
-config_dict['pulse_width_mm']  = pulse_width_mm
-config_dict['pulse_height_mm'] = pulse_height_mm
-config_dict['pulse_per_mv']= pulse_per_mv
-config_dict['pulse_per_sec']= pulse_per_sec
-config_dict['num_sampling_points']= num_sampling_points
-config_dict['strategy'] = strategy
-config_dict['lower']= lower
-config_dict['upper']= upper
-config_dict['thres_value'] = thres_value
-config_dict['kSized2d'] = kSize2d
-config_dict['kSized1d'] = kSize1d
-config_dict['perc_space_leads'] = perc_space_leads
-config_dict['dilation'] = dilation
-config_dict['perc_max_dist'] = perc_max_dist 
+    # Create a setup object with the configuration, including template and CSV
+    setup = Setup(
+        image=image,
+        template=template_name,
+        csv_name=csv_name,
+        strategy=strategy,
+        thres_value=thres_value,
+        dilation=dilation,
+        perc_space_leads=perc_space_leads,
+        layout=layout,
+        perc_max_dist=perc_max_dist,
+        pulse=pulse,
+        rhythm=rhythm,
+        verbose=verbose,
+        mmpsec=mmpsec,
+        mmpmv=mmpmv,
+        pulse_width_mm=pulse_width_mm,
+        pulse_height_mm=pulse_height_mm,
+        pulse_per_sec=pulse_per_sec,
+        pulse_per_mv=pulse_per_mv,
+        sample_frequency=sample_frequency,
+        time_lead=time_lead,
+        location=location,
+        num_sampling_points=num_sampling_points,
+        lower=lower,
+        upper=upper,
+        kSize2d=kSize2d,
+        kSize1d=kSize1d
+    )
 
-df=ecg_to_csv(image_name ,template_name, csv_name, config_dict )
-
-# Plot in the lay out
-plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], fs = 500, figure_size = (20, 12))
-plt.show()
+    # Call the main ECG processing function
+    df = ecg(setup)
+    
+    # Plot in the lay out
+    plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], fs = 500, figure_size = (20, 12))
+    plt.show()
+    print("THE END")
