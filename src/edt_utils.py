@@ -133,6 +133,7 @@ def extract_image(cropped_img, kSize2d=3, kSize1d=3):
     
     output_img = cv.normalize(output_img, None, 255, 0, cv.NORM_MINMAX, cv.CV_8U)
     return output_img
+
 def is_nan(value):
     try:
         return math.isnan(float(value))
