@@ -22,7 +22,6 @@ sample_frequency = 500
 time_lead = 2.5 # duratiom of the segment in seconds
 num_sampling_points = time_lead/(1/sample_frequency)
 location = 'right'
-strategy = 'none'  # It can be filter or color
 strategy = 'none'  # color | filter | none
 lower=(0,0,0) # black color
 upper=(179,255,220) # dark gray
