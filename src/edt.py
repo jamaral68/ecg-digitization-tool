@@ -161,17 +161,13 @@ def ecg_to_csv(config):
         config.hpulse = hpulse
 
         # Process the line into segments
-        line_dict = process_line(i, sliced_labeled_line, offset, config.lt_leads[i], config, 2)
+        line_dict = process_line(i, sliced_labeled_line, offset, config.lt_leads[i], config)
         proc_line_list.append(line_dict)
 
     # Print to check if everything is correct
     for i, line in enumerate(proc_line_list): 
         print("INFO: processing line {}".format(i))
         print_line_dict(line)
-
-    # Remove the rhythm line from the list of lines if present
-    if config.rhythm != 0:
-        proc_line_list.pop(config.rhythm-1)
 
     # Convert processed segments to a dataframe
     ecg_df = segment_to_df(proc_line_list, config.pulse_per_sec, config.pulse_per_mv, config.num_sampling_points)

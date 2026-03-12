@@ -5,8 +5,8 @@ from edt_utils import plot_ecg
 
 if __name__ == "__main__":
 
-    image = '../ecg_test2.png'         # Path to the ECG image
-    template_name = '../pul.png'       # Pulse template image
+    image = '../ecg4.jpg'         # Path to the ECG image
+    template_name = '../pul4.png'       # Pulse template image
     csv_name = '../ecg_test2.csv'      # Output CSV filename
     strategy = 'none'                  # Preprocessing strategy (none/filter/color)
     thres_value = 127                  # Threshold value for binarization

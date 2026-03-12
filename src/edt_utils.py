@@ -148,7 +148,7 @@ def measure_extract_pulse(x, y, verbose=0):
         print(f"pulse width: {width} time units")
     return width, height
 
-def detect_ref_pulse(roi, template,location='right', threshold=0.6, verbose=2):
+def detect_ref_pulse(roi, template,location='right', threshold=0.5, verbose=2):
     '''
     Detects a reference pulse using template matching
     '''
@@ -221,39 +221,71 @@ def display_segments(name, item, axis='off'):
     plt.subplots_adjust(wspace=0.05, left=0.01, bottom=0.01, right=0.99, top=0.9)
     plt.show()
 
-def process_line(line_number, labeled_line, offset, line_leads, config_dict, verbose):
+
+def create_segment(labeled_line, label, start_x, stop_x, start_y, stop_y, line_number):
     """
-    Process a labeled ECG line, segmenting it into individual curves
-    and calculating width, height, and baseline information for each segment.
+    Create a dictionary containing signal information for a segment.
+    
+    Parameters:
+        labeled_line: 2D array of labeled segments
+        label: integer label of the segment
+        start_x, stop_x: vertical slice
+        start_y, stop_y: horizontal slice
+        line_number: the line index in the ECG
+    
+    Returns:
+        segment_dict: dictionary containing segment info and extracted signal
     """
 
-    # Dictionary to store line information
-    line_dict = {}
-    line_dict['wpulse'] = config_dict.wpulse
-    line_dict['hpulse'] = config_dict.hpulse
-    line_dict['curves'] = []
-    line_dict['offset_line'] = offset
+    segment_dict = {
+        'line': line_number,
+        'label': label,
+        'start_x': start_x,
+        'stop_x': stop_x,
+        'start_y': start_y,
+        'stop_y': stop_y
+    }
 
-    display_title = "Labeled Line " + str(line_number)
-    display_segments(display_title, labeled_line)
+    seg = labeled_line[start_x:stop_x, start_y:stop_y]
+    seg = np.where(seg == label, 255, 0)
+
+    ws, ls, xs, ys = get_values_from_img(seg)
+
+    segment_dict['wseg'] = ws
+    segment_dict['lseg'] = ls
+    segment_dict['xseg'] = xs
+    segment_dict['yseg'] = ys
+    segment_dict['baseline'] = np.argmax(np.std(seg, axis=1))
+
+    return segment_dict
+
+def process_line(line_number, labeled_line, offset, line_leads, config_dict):
+    """
+    Process a labeled ECG line by segmenting it into individual leads
+    and extracting signal information for each segment.
+    """
+
+    line_dict = {
+        'wpulse': config_dict.wpulse,
+        'hpulse': config_dict.hpulse,
+        'curves': [],
+        'offset_line': offset
+    }
+
+    display_segments(f"Labeled Line {line_number}", labeled_line)
 
     u, c = np.unique(labeled_line, return_counts=True)
-    segment_labels = np.argsort(-c[1:]) + 1  # sort labels by segment size (descending)
-    segment_length = -np.sort(-c[1:])
+    segment_labels = np.argsort(-c[1:]) + 1
     max_label = np.max(u)
 
     app_seg_size = labeled_line.shape[1] // config_dict.layout[1]
+    min_valid_size = np.round(app_seg_size * 0.25, 0)
 
-    if verbose > 1:
-        print("INFO: unique labels: ", u)
-        print("INFO: counts: ", c)
-        print("INFO: segment labels: ", segment_labels)
-        print("INFO: segment lengths: ", segment_length)
+    if line_number + 1 == config_dict.rhythm:
+        return line_dict
 
-    temp = np.round(app_seg_size * 0.25, 0)
-
-    # Iterate over all detected labels
     for label in segment_labels:
+
         roi = (labeled_line == label)
         sl = ndimage.find_objects(roi)
 
@@ -263,74 +295,36 @@ def process_line(line_number, labeled_line, offset, line_leads, config_dict, ver
         roi = roi[sl[0][0], sl[0][1]]
         roi_length = roi.shape[1]
 
-        if roi_length < temp:
+        if roi_length < min_valid_size:
             continue
 
-        roi_copy = roi.astype(np.uint8) * 255
+        ratio = int(round(roi_length / app_seg_size))
+        ratio = max(1, min(ratio, config_dict.layout[1]))
 
-        # Calculate the ratio between segment length and approximate segment size
-        ratio = round(roi_length / app_seg_size, 0)
-        if verbose > 0:
-            print(f"INFO: label={label}, length={roi_copy.shape[1]}, ratio={ratio}")
+        x_start, x_stop = sl[0][0].start, sl[0][0].stop
+        y_start, y_stop = sl[0][1].start, sl[0][1].stop
+        segment_width = (y_stop - y_start) // ratio
 
-        # Ignore the rhythm line
-        if line_number + 1 == config_dict.rhythm:
-            continue
+        for i in range(ratio):
+            seg_start_y = y_start + i * segment_width
+            seg_stop_y = y_stop if i == ratio - 1 else y_start + (i + 1) * segment_width
 
-        # Internal function to create a segment dictionary
-        def create_segment(start_x, stop_x, start_y, stop_y, seg_label):
-            segment_dict = {
-                'line': line_number,
-                'label': seg_label,
-                'start_x': start_x,
-                'stop_x': stop_x,
-                'start_y': start_y,
-                'stop_y': stop_y
-            }
-            seg = labeled_line[start_x:stop_x, start_y:stop_y]
-            seg = np.where(seg == label, 255, 0)
+            segment = create_segment(
+                            labeled_line,
+                            label=label,  
+                            start_x=x_start,
+                            stop_x=x_stop,
+                            start_y=seg_start_y,
+                            stop_y=seg_stop_y,
+                            line_number=line_number
+                        )
+            line_dict['curves'].append(segment)
+            max_label += 1
 
-            ws, ls, xs, ys = get_values_from_img(seg)
-            segment_dict['wseg'] = ws
-            segment_dict['lseg'] = ls
-            segment_dict['xseg'] = xs
-            segment_dict['yseg'] = ys
-            segment_dict['baseline'] = np.argmax(np.std(seg, axis=1))
-
-            return segment_dict
-
-        # Split segments according to the ratio
-        if ratio >= 4:
-            if verbose > 0:
-                print("INFO: Four or more segments detected")
-        elif ratio == 3:
-            # Split into 3 segments
-            x_start, x_stop = sl[0][0].start, sl[0][0].stop
-            y_start, y_stop = sl[0][1].start, sl[0][1].stop
-            step = (y_stop - y_start) // 3
-            for i in range(3):
-                seg = create_segment(x_start, x_stop, y_start + i*step, y_start + (i+1)*step if i<2 else y_stop, max_label)
-                line_dict['curves'].append(seg)
-                max_label += 1
-        elif ratio == 2:
-            # Split into 2 segments
-            x_start, x_stop = sl[0][0].start, sl[0][0].stop
-            y_start, y_stop = sl[0][1].start, sl[0][1].stop
-            step = (y_stop - y_start) // 2
-            for i in range(2):
-                seg = create_segment(x_start, x_stop, y_start + i*step, y_start + (i+1)*step if i<1 else y_stop, max_label)
-                line_dict['curves'].append(seg)
-                max_label += 1
-        elif ratio == 1:
-            # Only one segment
-            seg = create_segment(sl[0][0].start, sl[0][0].stop, sl[0][1].start, sl[0][1].stop, label)
-            line_dict['curves'].append(seg)
-
-    # Sort segments by y-position and add lead names
     line_dict['curves'] = sorted(line_dict['curves'], key=lambda d: d['start_y'])
-    for i, d in enumerate(line_dict['curves']):
+    for i, seg in enumerate(line_dict['curves']):
         if i < len(line_leads):
-            d['name'] = line_leads[i]
+            seg['name'] = line_leads[i]
 
     return line_dict
 
