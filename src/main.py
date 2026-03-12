@@ -26,7 +26,6 @@ if __name__ == "__main__":
     time_lead = 2.5                     # Duration of the segment in seconds
     num_sampling_points = time_lead / (1 / sample_frequency)
     location = 'right'                  # Location of the reference pulse
-    verbose = 6                         # Verbose level for debugging
     lower = (0, 0, 0)                   # Lower color threshold (black)
     upper = (179, 255, 220)             # Upper color threshold (dark gray)
     kSize2d = 3                          # Kernel size for 2D filters
@@ -45,7 +44,6 @@ if __name__ == "__main__":
         perc_max_dist=perc_max_dist,
         pulse=pulse,
         rhythm=rhythm,
-        verbose=verbose,
         mmpsec=mmpsec,
         mmpmv=mmpmv,
         pulse_width_mm=pulse_width_mm,

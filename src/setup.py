@@ -10,7 +10,6 @@ class Setup:
         perc_max_dist,
         pulse,
         rhythm,
-        verbose,
         mmpsec,
         mmpmv,
         pulse_width_mm,
@@ -45,7 +44,6 @@ class Setup:
         self.time_lead = time_lead
         self.location = location
         self.num_sampling_points = num_sampling_points
-        self.verbose = verbose
         self.lower = lower
         self.upper = upper
         self.kSize2d = kSize2d
