@@ -5,6 +5,8 @@ import os
 from typing import Literal, get_args, get_type_hints, BinaryIO
 import boto3
 import botocore
+import cv2
+import numpy as np
 
 
 def get_element_list(
@@ -390,6 +392,29 @@ class S3Client:
         with BytesIO() as writter:
             self.bucket.download_fileobj(remote_object_key_adj, writter)
             return writter.getvalue()
+
+    def download_file_image(self, remote_object_key: str) -> np.ndarray:
+        """
+        Download an object and return its content as an image.
+
+        Parameters
+        ----------
+        remote_object_key: key in the bucket (accepts URI or partial path).
+        """
+        raw_bytes = self.download_file_bytes(remote_object_key)
+        img_array = np.frombuffer(raw_bytes, dtype=np.uint8)
+        img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+        return img
+
+    def download_files_images(self, remote_object_keys: list[str]) -> list[np.ndarray]:
+        """
+        Download an object and return its content as an image.
+
+        Parameters
+        ----------
+        remote_object_key: key in the bucket (accepts URI or partial path).
+        """
+        return [self.download_file_image(key) for key in remote_object_keys]
 
     def download_files_bytes(self, remote_object_keys: list[str]) -> list[bytes]:
         """

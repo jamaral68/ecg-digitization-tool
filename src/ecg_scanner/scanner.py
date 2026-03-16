@@ -25,24 +25,36 @@ from matplotlib.artist import Artist
 import argparse
 import os
 
+from dataclasses import dataclass
+
+
+@dataclass
+class ECGScannerConfig:
+    output_dir: Path | None = None
+    interactive: bool = False
+    min_quad_area_ratio: float = 0.3
+    max_quad_angle_range: int = 25
+    rescaled_height: float = 500.0
+    min_dist: int = 150
+    gaussian_blur_kernel_size: int = 5
+    morph_kernel_size: int = 11
+    canny_sigma: float = 0.2
+    rescaled_height: float = 500.0
+    clahe_clip_limit: float = 2.0
+    clahe_tile_grid_size: int = 8
+    bilateral_filter_d: int = 5
+    bilateral_filter_sigma_color: float = 50
+    bilateral_filter_sigma_space: float = 50
+    debug_mode: bool = True
+    hsv_hue_multiplier: float = 1.0
+    hsv_saturation_multiplier: float = 1.5
+    hsv_brightness_multiplier: float = 1.2
+
 
 class ECGScanner(object):
     """An ECG Image Scanner"""
 
-    def __init__(
-        self,
-        output_dir: Path | None = None,
-        interactive=False,
-        min_quad_area_ratio=0.3,
-        max_quad_angle_range=25,
-        min_dist=150,
-        gaussian_blur_kernel_size=5,
-        morph_kernel_size=11,
-        canny_sigma=0.75,
-        rescaled_height=500.0,
-        clahe_clip_limit=2.0,
-        clahe_tile_grid_size=8,
-    ):
+    def __init__(self, config: ECGScannerConfig):
         """
         Args:
             interactive (boolean): If True, user can adjust screen contour before
@@ -53,19 +65,10 @@ class ECGScanner(object):
             MAX_QUAD_ANGLE_RANGE (int):  A contour will also be rejected if the range
                 of its interior angles exceeds MAX_QUAD_ANGLE_RANGE. Defaults to 40.
         """
-        self.interactive = interactive
-        self.min_quad_area_ratio = min_quad_area_ratio
-        self.max_quad_angle_range = max_quad_angle_range
-        self.min_dist = min_dist
-        output_dir = output_dir or Path.cwd() / "scanned_ecgs"
-        self.output_dir = output_dir
+        self.config = config
+        self.output_dir = config.output_dir or Path.cwd() / "scanned_ecgs"
+        self.stages = {}
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        self.gaussian_blur_kernel_size = gaussian_blur_kernel_size
-        self.morph_kernel_size = morph_kernel_size
-        self.canny_sigma = canny_sigma
-        self.rescaled_height = rescaled_height
-        self.clahe_clip_limit = clahe_clip_limit
-        self.clahe_tile_grid_size = clahe_tile_grid_size
 
     def filter_corners(
         self,
@@ -75,7 +78,7 @@ class ECGScanner(object):
 
         def predicate(representatives, corner):
             return all(
-                dist.euclidean(representative, corner) >= self.min_dist
+                dist.euclidean(representative, corner) >= self.config.min_dist
                 for representative in representatives
             )
 
@@ -85,13 +88,15 @@ class ECGScanner(object):
                 filtered_corners.append(c)
         return filtered_corners
 
-    def angle_between_vectors_degrees(self, u, v):
+    def angle_between_vectors_degrees(self, u: np.ndarray, v: np.ndarray) -> float:
         """Returns the angle between two vectors in degrees"""
         return np.degrees(
             math.acos(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v)))
         )
 
-    def get_angle(self, p1, p2, p3):
+    def get_angle(
+        self, p1: tuple[float, float], p2: tuple[float, float], p3: tuple[float, float]
+    ) -> float:
         """
         Returns the angle between the line segment from p2 to p1
         and the line segment from p2 to p3 in degrees
@@ -105,7 +110,7 @@ class ECGScanner(object):
 
         return self.angle_between_vectors_degrees(avec, cvec)
 
-    def angle_range(self, quad):
+    def angle_range(self, quad: np.ndarray) -> float:
         """
         Returns the range between max and min interior angles of quadrilateral.
         The input quadrilateral must be a numpy array with vertices ordered clockwise
@@ -224,12 +229,11 @@ class ECGScanner(object):
 
     def is_valid_contour(self, cnt, image_width, image_height):
         """Returns True if the contour satisfies all requirements set at instantitation"""
-
         return (
             len(cnt) == 4
             and cv2.contourArea(cnt)
-            > image_width * image_height * self.min_quad_area_ratio
-            and self.angle_range(cnt) < self.max_quad_angle_range
+            > image_width * image_height * self.config.min_quad_area_ratio
+            and self.angle_range(cnt) < self.config.max_quad_angle_range
         )
 
     @staticmethod
@@ -334,11 +338,91 @@ class ECGScanner(object):
         # return the resized image
         return resized
 
-    def auto_canny(self, gray):
-        v = np.median(gray)
-        lower = int(max(0, (1.0 - self.canny_sigma) * v))
-        upper = int(min(255, (1.0 + self.canny_sigma) * v))
-        return cv2.Canny(gray, lower, upper)
+    def set_stages(
+        self,
+        name: str,
+        image: np.ndarray,
+        points: np.ndarray | None = None,
+        draw_contour: bool = False,
+    ) -> None:
+        if not self.config.debug_mode:
+            return
+        self.stages[name] = (image, points, draw_contour)
+
+    def get_stages(self) -> dict[str, tuple[np.ndarray, np.ndarray | None, bool]]:
+        stages_result = []
+        for k, v in self.stages.items():
+            if isinstance(v, tuple):
+                stages_result.append((k, v[0], v[1], v[2]))
+            else:
+                stages_result.append((k, v))
+        return stages_result
+
+    def auto_canny(self, gray: np.ndarray) -> np.ndarray:
+        v = np.quantile(gray, 0.5)
+        lower = int(max(0, (1.0 - self.config.canny_sigma) * v))
+        upper = int(min(255, (1.0 + self.config.canny_sigma) * v))
+        return cv2.Canny(gray, lower, upper, apertureSize=3, L2gradient=True)
+
+    def dilate_image(self, gray: np.ndarray) -> dict[str, np.ndarray]:
+        # Highlight dark ECG trace on bright paper
+        kernel_bh = cv2.getStructuringElement(
+            cv2.MORPH_RECT,
+            (self.config.morph_kernel_size, self.config.morph_kernel_size),
+        )
+        blackhat = cv2.morphologyEx(gray, cv2.MORPH_GRADIENT, kernel_bh)
+        self.set_stages("gradient", blackhat)
+
+        # Clean tiny noise
+        kernel_open = cv2.getStructuringElement(cv2.MORPH_DIAMOND, (7, 7))
+        opened = cv2.morphologyEx(blackhat, cv2.MORPH_OPEN, kernel_open)
+        self.set_stages("opened", opened)
+        # Reconnect broken ECG segments
+        kernel_close = cv2.getStructuringElement(cv2.MORPH_DIAMOND, (5, 5))
+        closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel_close)
+        self.set_stages("closed", closed)
+
+        return closed
+
+    def change_image_parameters(self, image: np.ndarray) -> np.ndarray:
+        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
+
+        # Canais: H (matiz), S (saturação), V (brilho)
+        hsv[:, :, 0] *= (
+            self.config.hsv_hue_multiplier
+        )  # Hue       — multiplicador (cuidado: faixa 0-180 no OpenCV)
+        hsv[:, :, 1] *= (
+            self.config.hsv_saturation_multiplier
+        )  # Saturação — >1 aumenta, <1 diminui
+        hsv[:, :, 2] *= (
+            self.config.hsv_brightness_multiplier
+        )  # Brilho    — >1 mais claro, <1 mais escuro
+
+        hsv = np.clip(hsv, 0, 255).astype(np.uint8)
+        result = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
+        return result
+
+    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
+        self.set_stages("original", image)
+        image = self.change_image_parameters(image)
+        self.set_stages("changed", image)
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.bilateralFilter(
+            gray,
+            d=self.config.bilateral_filter_d,
+            sigmaColor=self.config.bilateral_filter_sigma_color,
+            sigmaSpace=self.config.bilateral_filter_sigma_space,
+        )
+        clahe = cv2.createCLAHE(
+            clipLimit=self.config.clahe_clip_limit,
+            tileGridSize=(
+                self.config.clahe_tile_grid_size,
+                self.config.clahe_tile_grid_size,
+            ),
+        )
+        img_clahe = clahe.apply(gray)
+        self.set_stages("clahe", img_clahe)
+        return img_clahe
 
     def get_contour(self, rescaled_image):
         """
@@ -348,24 +432,16 @@ class ECGScanner(object):
         the corners of the document. If no corners were found, or the four corners represent
         a quadrilateral that is too small or convex, it returns the original four corners.
         """
-
         image_height, image_width, _ = rescaled_image.shape
         # convert the image to grayscale and blur it slightly
-        gray = cv2.cvtColor(rescaled_image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(
-            gray, (self.gaussian_blur_kernel_size, self.gaussian_blur_kernel_size), 0
-        )
-
+        gray = self.preprocess_image(rescaled_image)
+        self.set_stages("gray", gray)
         # dilate helps to remove potential holes between edge segments
-        kernel = cv2.getStructuringElement(
-            cv2.MORPH_ELLIPSE, (self.morph_kernel_size, self.morph_kernel_size)
-        )
-        dilated = cv2.morphologyEx(gray, cv2.MORPH_CLOSE, kernel)
-
+        # gray = self.dilate_image(gray)
         # find edges and mark them in the output map using the Canny algorithm
-        edged = self.auto_canny(dilated)
+        edged = self.auto_canny(gray)
         test_corners = self.get_corners(edged)
-
+        self.set_stages("edged", edged)
         approx_contours = []
 
         if len(test_corners) >= 4:
@@ -386,14 +462,12 @@ class ECGScanner(object):
             if self.is_valid_contour(approx, image_width, image_height):
                 approx_contours.append(approx)
 
-            # for debugging: uncomment the code below to draw the corners and countour found
-            # by get_corners() and overlay it on the image
-
-            # cv2.drawContours(rescaled_image, [approx], -1, (20, 20, 255), 2)
-            # plt.scatter(*zip(*test_corners))
-            # plt.imshow(rescaled_image)
-            # plt.show()
-
+            self.set_stages(
+                f"approx-{len(approx_contours)}-{len(approx)}",
+                rescaled_image,
+                approx,
+                True,
+            )
         # also attempt to find contours directly from the edged image, which occasionally
         # produces better results
         (cnts, hierarchy) = cv2.findContours(
@@ -421,8 +495,9 @@ class ECGScanner(object):
 
         else:
             screenCnt = max(approx_contours, key=cv2.contourArea)
+        screenCnt = screenCnt.reshape(4, 2)  # .reshape(-1, 2)
 
-        return screenCnt.reshape(4, 2)
+        return screenCnt
 
     def interactive_get_contour(self, screenCnt, rescaled_image):
         poly = Polygon(
@@ -444,21 +519,36 @@ class ECGScanner(object):
         new_points = np.array([[p] for p in new_points], dtype="int32")
         return new_points.reshape(4, 2)
 
-    def scan(self, image_path):
+    ## TODO: improve this function
+    def rotate_image(self, image: np.ndarray):
+        if image.shape[0] > image.shape[1]:
+            return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        return image
+
+    def scan_image_path(self, image_path):
         # load the image and compute the ratio of the old height
         # to the new height, clone it, and resize it
-        image = cv2.imread(image_path)
+        return self.scan(cv2.imread(image_path))
 
+    def scan_images_and_save(self, image_paths):
+        for image_path in image_paths:
+            img = self.scan_image_path(image_path)
+            cv2.imwrite(self.config.output_dir / image_path.name, img)
+
+    def reset_stages(self):
+        self.stages.clear()
+
+    def scan(self, image: np.ndarray):
         assert image is not None
-
-        ratio = image.shape[0] / self.rescaled_height
+        image = self.rotate_image(image)
+        ratio = image.shape[0] / self.config.rescaled_height
         orig = image.copy()
-        rescaled_image = self.resize(image, height=int(self.rescaled_height))
+        rescaled_image = self.resize(image, height=int(self.config.rescaled_height))
 
         # get the contour of the document
         screenCnt = self.get_contour(rescaled_image)
 
-        if self.interactive:
+        if self.config.interactive:
             screenCnt = self.interactive_get_contour(screenCnt, rescaled_image)
 
         # apply the perspective transformation
@@ -466,28 +556,17 @@ class ECGScanner(object):
 
         # convert the warped image to grayscale
         gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-        # equalização de histograma adaptativa (CLAHE)
-        clahe = cv2.createCLAHE(
-            clipLimit=self.clahe_clip_limit,
-            tileGridSize=(self.clahe_tile_grid_size, self.clahe_tile_grid_size),
-        )
-        gray_clahe = clahe.apply(gray)
         # sharpen image
-        # sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
-        # sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
 
-        # sharpen_clahe = cv2.GaussianBlur(gray_clahe, (0, 0), 3)
-        # sharpen_clahe = cv2.addWeighted(gray_clahe, 1.5, sharpen_clahe, -0.5, 0)
+        sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
+        sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
 
         # apply adaptive threshold to get black and white effect
         thresh = cv2.adaptiveThreshold(
             gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
         )
-        # thresh_clahe = cv2.adaptiveThreshold(
-        #    gray_clahe, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
-        # )
-
-        return thresh, gray_clahe
+        self.set_stages("thresh", thresh)
+        return thresh
 
 
 class PolygonInteractor(object):
