@@ -5,12 +5,12 @@ from edt_utils import plot_ecg
 
 if __name__ == "__main__":
 
-    image = '../ecg4.jpg'         # Path to the ECG image
-    template_name = '../pul4.png'       # Pulse template image
+    image = '../teste.png'         # Path to the ECG image
+    template_name = '../pul.png'       # Pulse template image
     csv_name = '../ecg_test2.csv'      # Output CSV filename
-    strategy = 'none'                  # Preprocessing strategy (none/filter/color)
-    thres_value = 127                  # Threshold value for binarization
-    dilation = 10                      # Number of dilation iterations
+    strategy = 'filter'                  # Preprocessing strategy (none/filter/color)
+    thres_value = 50             # Threshold value for binarization
+    dilation = 15                     # Number of dilation iterations
     perc_space_leads = 0.2             # Percentage spacing between leads
     layout = (3, 4)                    # ECG layout: rows x columns
     perc_max_dist = 0.7                # Maximum distance percentage for line slicing
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     sample_frequency = 500              # Sampling frequency in Hz
     time_lead = 2.5                     # Duration of the segment in seconds
     num_sampling_points = time_lead / (1 / sample_frequency)
-    location = 'right'                  # Location of the reference pulse
+    location = 'left'                  # Location of the reference pulse
     lower = (0, 0, 0)                   # Lower color threshold (black)
     upper = (179, 255, 220)             # Upper color threshold (dark gray)
     kSize2d = 3                          # Kernel size for 2D filters
