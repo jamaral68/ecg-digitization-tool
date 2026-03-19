@@ -148,70 +148,53 @@ def measure_extract_pulse(x, y, verbose=0):
         print(f"pulse width: {width} time units")
     return width, height
 
-def detect_ref_pulse(roi, template,location='right', threshold=0.5, verbose=2):
+def detect_ref_pulse_yolo(image, model):
     '''
-    Detects a reference pulse using template matching
+    Detects a reference pulse using YOLO
+    and determines if it is on the left or right side of the image
     '''
-    if roi.shape[0] <= template.shape[0] or roi.shape[1] <= template.shape[1]:
-        # template is bigger than ROI. Cannot perform matchTemplate
-        empty_list=[]
-        empty_array = np.array(empty_list)
-        loc = (empty_array,empty_array )
-    else:
-        method = cv.TM_CCORR_NORMED
-        res = cv.matchTemplate(roi,template,method) # try to find the pulse using template
 
-        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(res)
+    results = model.predict(image)
+    result = results[0]
 
-        # If the method is TM_SQDIFF or TM_SQDIFF_NORMED, take minimum
-        if method in [cv.TM_SQDIFF, cv.TM_SQDIFF_NORMED]:
-            top_left = min_loc
-            x = top_left[1]
-            y = top_left[0]
-            similarity_value = min_val
-            print("INFO: min similarity value is {} in x = {} and y = {}.".format(min_val,x,y))
+    boxes = result.boxes
+
+    if boxes is not None and len(boxes) > 0:
+        detected = True
+
+        confs = boxes.conf.cpu().numpy()
+        best_idx = np.argmax(confs)
+        best_box = boxes[best_idx]
+
+        xyxy = best_box.xyxy.cpu().numpy()[0]
+        x1, y1, x2, y2 = map(int, xyxy)
+
+        similarity_value = float(confs[best_idx])
+
+        wpulse = x2 - x1
+        hpulse = y2 - y1
+
+        height, width = image.shape[:2]
+        center_x = (x1 + x2) / 2
+
+        if center_x < width / 2:
+            location = 'left'
         else:
-            top_left = max_loc
-            x = top_left[1]
-            y = top_left[0]
-            similarity_value = max_val
-            print("INFO: max similarity value is {} in x = {} and y = {}.".format(max_val,x,y))
+            location = 'right'
 
-        # TODO: check if necessary
-        x = top_left[1]
-        y = top_left[0]
-
-        template_width, template_height = template.shape
-        if verbose > 1:
-            plt.imshow(roi)
-            rect = plt.Rectangle((y, x), template_height, template_width, color='red',
-                    fc='none')
-            plt.gca().add_patch(rect)
-            plt.title('Grayscale image with bounding box around the pulse')
-            plt.show()
-
-        loc = np.where(res >= threshold)
-
-    if len(loc[0])>0:
-        detected = True # pulse detected
-
-        ppts = np.array(list(map(list, zip(*loc[::-1])))) # obtain array from list of tuples
-
-        ppts_max = ppts[:,0].max()
-        ppts_min = ppts[:,0].min()
-        ppts_median = np.median(ppts[:,0])
-
-        extracted_pulse = roi[x:x+template_width, y:y+template_height]
-        _,_,xpulse,ypulse= get_values_from_img(extracted_pulse)
-        wpulse,hpulse = measure_extract_pulse(xpulse,ypulse)
+        x = y1
+        y = x1
 
     else:
-              # No pulse detected or ROI has no pulse
-              detected = False
-              wpulse = np.nan
-              hpulse = np.nan
+        detected = False
+        similarity_value = 0.0
+        x = np.nan
+        y = np.nan
+        wpulse = np.nan
+        hpulse = np.nan
+        location = None
 
-    return detected, location, similarity_value, x, y, wpulse, hpulse
+    return detected, location, similarity_value, x, y, wpulse, hpulse, result
 
 def display_segments(name, item, axis='off'):
     plt.figure(figsize=(12, 9))
