@@ -1,7 +1,5 @@
 /new
-/**/*.png
 /**/*.csv
-/**/*.jpg
 /ecgvenv
 /ecgvenvwin
 /.vscode

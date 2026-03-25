@@ -1,5 +1,13 @@
-# ecg-digitization-tool
+# Ecg-digitization-tool
 
-2024-12-08
+## Resumo 
+Este projeto tem como objetivo converter imagens de eletrocardiogramas (ECG) em dados estruturados no formato CSV, permitindo análise digital de sinais cardíacos a partir de imagens.
 
-2024-11-24
+## Instalação
+
+
+```
+Clone o repositório
+
+
+```
