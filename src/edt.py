@@ -186,7 +186,7 @@ def ecg_to_csv(config):
         config.pulse_per_mv,
         config.num_sampling_points
     )
-    print(ecg_df)
+    
     ecg_df.to_csv(config.csv_name)
 
     return ecg_df
