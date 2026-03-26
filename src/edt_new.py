@@ -2,8 +2,7 @@ import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
 import pandas as pd
-from edt_utils import segment_to_df, plot_ecg
-from lead import Lead
+from edt_utils import plot_ecg
 
 """
 def train_model(model, data, epochs, imgsz, device, workers):
@@ -15,7 +14,7 @@ def train_model(model, data, epochs, imgsz, device, workers):
 
 """
 
-def ecg_to_csv(img_path="../teste.png", pulse_per_sec=1000, pulse_per_mv=2, num_pts=500):
+def ecg_to_csv(img_path="../teste.png", pulse_per_sec=1000, pulse_per_mv=2, num_pts=1250):
     model = YOLO("best.pt")
     results = model(img_path)
     result = results[0]
@@ -23,47 +22,44 @@ def ecg_to_csv(img_path="../teste.png", pulse_per_sec=1000, pulse_per_mv=2, num_
     img = cv.imread(img_path)
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    line_list = []
-    lead_names = []
+    signals = {}
 
     for box in result.boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
         cls_id = int(box.cls[0])
-        lead_name = result.names[cls_id]
+
+        lead_name = model.names[cls_id]
+
+        if lead_name == 'pulse':
+            continue
 
         crop = img_gray[y1:y2, x1+10:x2-10]
         height, width = crop.shape
-        xseg = np.arange(width)
-        yseg = []
 
+        yseg = []
         for col in range(width):
             column_data = crop[:, col]
             y = np.argmin(column_data)
             yseg.append(height - y)
 
-        if lead_name != 'pulse':
-            line = {
-                'wpulse': width,
-                'hpulse': max(yseg),
-                'curves': [
-                    {
-                        'xseg': xseg,
-                        'yseg': yseg,
-                        'wseg': width,
-                        'baseline': min(yseg),
-                        'name': lead_name
-                    }
-                ]
-            }
-            line_list.append(line)
-            lead_names.append(lead_name)  
+        yseg = np.array(yseg)
 
-    df = segment_to_df(line_list, pulse_per_sec, pulse_per_mv, num_pts)
+        yseg = yseg - np.min(yseg)
 
-    df_leads = pd.DataFrame([lead_names], columns=df.columns)
-    df_leads.index = ['lead_name']
+        yseg = yseg / pulse_per_mv
 
-    df = pd.concat([df_leads, df], ignore_index=False)
+        x_old = np.linspace(0, 1, len(yseg))
+        x_new = np.linspace(0, 1, num_pts)
+        y_resampled = np.interp(x_new, x_old, yseg)
+
+        signals[lead_name] = y_resampled
+
+    lead_order = ['I', 'aVR', 'V1', 'V4',
+                  'II', 'aVL', 'V2', 'V5',
+                  'III', 'aVF', 'V3', 'V6']
+
+    df = pd.DataFrame({lead: signals.get(lead, np.zeros(num_pts)) for lead in lead_order})
+
     return df
 
 # Exemplo de uso
