@@ -1,9 +1,9 @@
 import cv2 as cv
-import matplotlib.pyplot as plt
 import numpy as np
 from ultralytics import YOLO
-from lead import Lead 
-
+import pandas as pd
+from edt_utils import segment_to_df, plot_ecg
+from lead import Lead
 
 """
 def train_model(model, data, epochs, imgsz, device, workers):
@@ -15,43 +15,58 @@ def train_model(model, data, epochs, imgsz, device, workers):
 
 """
 
-def ecg_to_csv():
+def ecg_to_csv(img_path="../teste.png", pulse_per_sec=1000, pulse_per_mv=2, num_pts=500):
     model = YOLO("best.pt")
-    results = model("../teste.png")
+    results = model(img_path)
     result = results[0]
 
-    img = cv.imread("../teste.png")
-    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY) 
+    img = cv.imread(img_path)
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    leads_list = []
+    line_list = []
+    lead_names = []
 
     for box in result.boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
         cls_id = int(box.cls[0])
         lead_name = result.names[cls_id]
 
-        lead = Lead(name=lead_name, coords=[x1, y1, x2, y2])
         crop = img_gray[y1:y2, x1+10:x2-10]
-
-      
         height, width = crop.shape
         xseg = np.arange(width)
         yseg = []
 
         for col in range(width):
             column_data = crop[:, col]
-            y = np.argmin(column_data)  
-            yseg.append(height - y)     
+            y = np.argmin(column_data)
+            yseg.append(height - y)
 
-        leads_list.append({'line': cls_id, 'name': lead_name, 'xseg': xseg, 'yseg': yseg, 'lseg': len(xseg)})
+        if lead_name != 'pulse':
+            line = {
+                'wpulse': width,
+                'hpulse': max(yseg),
+                'curves': [
+                    {
+                        'xseg': xseg,
+                        'yseg': yseg,
+                        'wseg': width,
+                        'baseline': min(yseg),
+                        'name': lead_name
+                    }
+                ]
+            }
+            line_list.append(line)
+            lead_names.append(lead_name)  
 
-    for seg in leads_list:
-        if seg['name'] != 'pulse':
-            fig = plt.figure()
-            plt.title(seg['name'])
-            plt.plot(seg['xseg'], seg['yseg'])
-            plt.grid()
-            plt.show()
+    df = segment_to_df(line_list, pulse_per_sec, pulse_per_mv, num_pts)
 
+    df_leads = pd.DataFrame([lead_names], columns=df.columns)
+    df_leads.index = ['lead_name']
 
-ecg_to_csv()
+    df = pd.concat([df_leads, df], ignore_index=False)
+    return df
+
+# Exemplo de uso
+layout = (3, 4)
+df = ecg_to_csv()
+plot_ecg(df,df.columns,'FUNCIONOU', n_rows = layout[0], n_columns = layout[1], fs = 500, figure_size = (20, 12))

@@ -12,7 +12,7 @@ def ecg_to_csv(config):
     model = YOLO("yolov8n.pt")
 
     # Train model
-    model.train(data="dataset.yaml", epochs=20, imgsz=360, device="cpu", workers=8)
+    model.train(data="dataset.yaml", epochs=1, imgsz=360, device="cpu", workers=8)
 
     # Reading and pre-processing the image
     image = cv.imread(config.image)
