@@ -1,7 +1,6 @@
 import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
-import pandas as pd
 from edt_utils import plot_ecg, segment_to_df
 
 """
@@ -14,7 +13,7 @@ def train_model(model, data, epochs, imgsz, device, workers):
 
 """
 
-image = '../teste.png'
+image = '../ecg100.png'
 pulse_width_mm = 5
 pulse_height_mm = 10
 mmpsec = 25
@@ -30,10 +29,12 @@ def ecg_to_csv(img_path=image):
     model = YOLO("best.pt")
     results = model(img_path)
     result = results[0]
+    results[0].save()
 
     line_list = []
     img = cv.imread(img_path)
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
 
     for box in result.boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
