@@ -7,31 +7,18 @@ def train_model(model, data, epochs, imgsz, device, workers):
     return model 
 
 """
-
 import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
 from edt_utils import segment_to_df
 
-image = '../teste.png'
-pulse_width_mm = 5
-pulse_height_mm = 10
-mmpsec = 25
-mmpmv = 10
-pulse_per_sec = pulse_width_mm / mmpsec
-pulse_per_mv = pulse_height_mm / mmpmv
-sample_frequency = 500
-time_lead = 2.5
-num_sampling_points = int(time_lead * sample_frequency)
-layout = (3, 4)
-
-def ecg_to_csv(img_path=image):
+def ecg_to_csv(setup):
     model = YOLO("best.pt")
-    results = model(img_path)
+    results = model(setup.image)
     result = results[0]
 
     line_list = []
-    img = cv.imread(img_path)
+    img = cv.imread(setup.image)
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     for box in result.boxes:
@@ -59,7 +46,7 @@ def ecg_to_csv(img_path=image):
             }]
         })
 
-    df = segment_to_df(line_list, pulse_per_sec, pulse_per_mv, num_sampling_points)
+    df = segment_to_df(line_list, setup.pulse_per_sec, setup.pulse_per_mv, setup.num_sampling_points)
 
     lead_order = ['I', 'aVR', 'V1', 'V4',
                   'II', 'aVL', 'V2', 'V5',
@@ -67,6 +54,6 @@ def ecg_to_csv(img_path=image):
 
     for lead in lead_order:
         if lead not in df.columns:
-            df[lead] = np.zeros(num_sampling_points)
+            df[lead] = np.zeros(setup.num_sampling_points)
 
     return df
