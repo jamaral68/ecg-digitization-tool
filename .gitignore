@@ -6,6 +6,5 @@
 /.spyproject
 /ptbxlimage
 __pycache__/
-/**/*.pt
 /**/labels/*.cache
 /**/runs
