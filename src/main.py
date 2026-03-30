@@ -65,6 +65,21 @@ if __name__ == "__main__":
     df = ecg_to_csv(setup)
     
     # Plot in the lay out
-    plot_ecg(df,df.columns,csv_name, n_rows = layout[0], n_columns = layout[1], fs = 500, figure_size = (20, 12))
+    lead_order = [
+        'I', 'aVR', 'V1', 'V4',
+        'II', 'aVL', 'V2', 'V5',
+        'III', 'aVF', 'V3', 'V6'
+    ]
+
+    plot_ecg(
+        df,
+        lead_order,
+        csv_name,
+        n_rows=layout[0],
+        n_columns=layout[1],
+        fs=setup.sample_frequency,
+        figure_size=(20, 12)
+    )
+
     plt.show()
     print("THE END")

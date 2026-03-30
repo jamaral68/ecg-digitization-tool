@@ -48,12 +48,4 @@ def ecg_to_csv(setup):
 
     df = segment_to_df(line_list, setup.pulse_per_sec, setup.pulse_per_mv, setup.num_sampling_points)
 
-    lead_order = ['I', 'aVR', 'V1', 'V4',
-                  'II', 'aVL', 'V2', 'V5',
-                  'III', 'aVF', 'V3', 'V6']
-
-    for lead in lead_order:
-        if lead not in df.columns:
-            df[lead] = np.zeros(setup.num_sampling_points)
-
     return df
