@@ -45,7 +45,7 @@ def ecg_to_csv(setup):
         height, width = crop.shape
 
         yseg = np.array([height - np.argmin(crop[:, col]) for col in range(width)])
-        baseline = np.min(yseg)
+        baseline = np.percentile(yseg, 10)
 
         line_list.append({
             'wpulse': width,
