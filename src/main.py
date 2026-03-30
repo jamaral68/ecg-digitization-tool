@@ -8,8 +8,8 @@ if __name__ == "__main__":
 
     image = '../teste.png' # Path to the input ECG image file to be processed
     csv_name = '../ecg_test2.csv' # Path and filename for saving the extracted ECG data as a CSV
-    pulse_width_mm = 5       # Horizontal reference in mm 
-    pulse_height_mm = 1000   # Vertical reference in mm 
+    pulse_width_mm = 500       # Horizontal reference 
+    pulse_height_mm = 1000   # Vertical reference 
     mmpsec = 25              # Standard paper speed in mm/s 
     mmpmv = 10               # Standard amplitude scale in mm/mV 
     pulse_per_sec = pulse_width_mm / mmpsec   # Fraction of a second represented by the pulse width
