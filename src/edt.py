@@ -31,6 +31,7 @@ def ecg_to_csv(setup, model: YOLO):
     """
     # Run YOLO model on the input ECG image
     results = model(setup.image)
+    results[0].save()
     result = results[0]
 
     # Load the image using OpenCV
