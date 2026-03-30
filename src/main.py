@@ -5,82 +5,54 @@ from edt import ecg_to_csv
 
 if __name__ == "__main__":
 
-    image = '../teste.png'         # Path to the ECG image
-    template_name = '../pul.png'       # Pulse template image
-    csv_name = '../ecg_test2.csv'      # Output CSV filename
-    strategy = 'filter'                  # Preprocessing strategy (none/filter/color)
-    thres_value = 50             # Threshold value for binarization
-    dilation = 15                     # Number of dilation iterations
-    perc_space_leads = 0.2             # Percentage spacing between leads
-    layout = (3, 4)                    # ECG layout: rows x columns
-    perc_max_dist = 0.7                # Maximum distance percentage for line slicing
-    rhythm = 4                         # Which line has the rhythm
-    pulse = [0, 1, 2]                  # Lines that have pulses
-    pulse_width_mm = 5                  # Pulse width in mm
-    pulse_height_mm = 10                # Pulse height in mm
-    mmpsec = 25                         # mm per second (time scaling)
-    mmpmv = 10                          # mm per mV (voltage scaling)
-    pulse_per_sec = pulse_width_mm / mmpsec
-    pulse_per_mv = pulse_height_mm / mmpmv
-    sample_frequency = 500              # Sampling frequency in Hz
-    time_lead = 2.5                     # Duration of the segment in seconds
-    num_sampling_points = time_lead / (1 / sample_frequency)
-    location = 'left'                  # Location of the reference pulse
-    lower = (0, 0, 0)                   # Lower color threshold (black)
-    upper = (179, 255, 220)             # Upper color threshold (dark gray)
-    kSize2d = 3                          # Kernel size for 2D filters
-    kSize1d = 3                          # Kernel size for 1D filters
+    image = '../teste.png'        # Path to the ECG image used as input
+    csv_name = '../ecg_test2.csv' # Path where the output CSV will be saved
+    pulse_width_mm = 5            # Width of reference pulse (used to compute time scale)
+    pulse_height_mm = 10          # Height of reference pulse (used to compute voltage scale)
+    mmpsec = 25                   # mm per second (standard ECG paper speed)
+    mmpmv = 10                    # mm per mV (standard ECG amplitude scaling)
+    pulse_per_sec = pulse_width_mm / mmpsec   # Conversion factor: pixels → seconds (used in convert_to_secmv)
+    pulse_per_mv = pulse_height_mm / mmpmv    # Conversion factor: pixels → mV (used in convert_to_secmv)
+    sample_frequency = 500        # Sampling frequency in Hz (used for plotting time axis)
+    time_lead = 2.5              # Duration of each ECG lead in seconds
 
-    # Create a setup object with the configuration, including template and CSV
+    # Total number of samples per lead after interpolation (defines signal resolution)
+    num_sampling_points = int(time_lead * sample_frequency) 
+
+    # ECG display layout (rows x columns) used to arrange leads in the plot grid
+    layout = (3, 4)             
+
     setup = Setup(
-        image=image,
-        template=template_name,
-        csv_name=csv_name,
-        strategy=strategy,
-        thres_value=thres_value,
-        dilation=dilation,
-        perc_space_leads=perc_space_leads,
-        layout=layout,
-        perc_max_dist=perc_max_dist,
-        pulse=pulse,
-        rhythm=rhythm,
-        mmpsec=mmpsec,
-        mmpmv=mmpmv,
-        pulse_width_mm=pulse_width_mm,
-        pulse_height_mm=pulse_height_mm,
-        pulse_per_sec=pulse_per_sec,
-        pulse_per_mv=pulse_per_mv,
-        sample_frequency=sample_frequency,
-        time_lead=time_lead,
-        location=location,
-        num_sampling_points=num_sampling_points,
-        lower=lower,
-        upper=upper,
-        kSize2d=kSize2d,
-        kSize1d=kSize1d
+        image=image,                         
+        csv_name=csv_name,                   
+        pulse_per_sec=pulse_per_sec,         
+        pulse_per_mv=pulse_per_mv,           
+        sample_frequency=sample_frequency,   
+        num_sampling_points=num_sampling_points  
     )
 
-    # Call the main ECG processing function
-    df = ecg_to_csv(setup)
-    
-    # Plot in the lay out
+    df = ecg_to_csv(setup)  
+
     lead_order = [
         'I', 'aVR', 'V1', 'V4',
         'II', 'aVL', 'V2', 'V5',
         'III', 'aVF', 'V3', 'V6'
     ]
 
+    # Plot ECG signals in grid layout
     plot_ecg(
         df,
         lead_order,
-        csv_name,
-        n_rows=layout[0],
-        n_columns=layout[1],
-        fs=setup.sample_frequency,
-        figure_size=(20, 12)
+        csv_name,                      # Used as figure title
+        n_rows=layout[0],              # Number of subplot rows
+        n_columns=layout[1],           # Number of subplot columns
+        fs=setup.sample_frequency,     # Sampling frequency for time axis
+        figure_size=(20, 12)           # Size of the figure
     )
 
     plt.show()
 
+    # Save extracted ECG signals to CSV
     df.to_csv(setup.csv_name, index=False)
+
     print("THE END")
