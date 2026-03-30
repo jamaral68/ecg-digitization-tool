@@ -81,4 +81,6 @@ if __name__ == "__main__":
     )
 
     plt.show()
+
+    df.to_csv(setup.csv_name, index=False)
     print("THE END")
