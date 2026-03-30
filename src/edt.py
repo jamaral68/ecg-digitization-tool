@@ -1,8 +1,21 @@
 """
-def train_model(model, data, epochs, imgsz, device, workers):
+# config ideal 
+# name_model - yolov8s.pt
+# epochs - 200
+# imgsz - 768
+# workers - 4
+def train_model(name_model, data, epochs, imgsz, batch, device, workers):
     
-    model = YOLO(model)
-    model.train(data=data, epochs=epochs, imgsz=imgsz, device=device, workers=workers)
+    model = YOLO(name_model)
+    model.train(
+        data=data,
+        epochs=epochs,
+        imgsz=imgsz,
+        batch=batch,
+        device=device,
+        workers=workers
+    )
+
 
     return model 
 
