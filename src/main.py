@@ -1,8 +1,7 @@
 import matplotlib.pyplot as plt
-#from edt import ecg_to_csv
 from setup import Setup
 from edt_utils import plot_ecg
-from edt_new import ecg_to_csv
+from edt import ecg_to_csv
 
 if __name__ == "__main__":
 
