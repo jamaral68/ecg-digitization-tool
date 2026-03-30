@@ -6,20 +6,25 @@ from scipy.signal import medfilt
 
 def convert_to_secmv(xs, ys, wp, hp, pulse_per_sec, pulse_per_mv):
     """
-    Convert pixel coordinates to seconds (x) and millivolts (y).
-    Each vertical square = 1 mV
-    Each horizontal square = pulse_per_sec (pixels / s)
+    Convert pixel coordinates to seconds (x) and mV (y), correcting baseline and amplitude.
     """
-    if hp == 0 or wp == 0:
-        raise ValueError("hpulse and wpulse must be > 0 for conversion")
 
-    ys_smooth = medfilt(ys, 101)
-    baseline_px = np.median(ys_smooth)
-    
+    if hp == 0 or wp == 0:
+        raise ValueError("hp and wp must be > 0 for conversion")
+
+    # Smooth the line to remove noise
+    kernel_size = min(len(ys)//2*2+1, 101)  # ensure odd kernel size for medfilt
+    ys_smooth = medfilt(ys, kernel_size=kernel_size)
+
+    # Calculate baseline robustly (baseline of the wave)
+    baseline_px = np.percentile(ys_smooth, 50)  # median of the smoothed wave
+
+    # Convert pixels to mV
     ymv = (ys - baseline_px) / pulse_per_mv
 
+    # Convert horizontal pixels to seconds
     sec_per_px = pulse_per_sec / wp
-    xsec = sec_per_px * np.asarray(xs)
+    xsec = np.asarray(xs) * sec_per_px
 
     return xsec, ymv
 
