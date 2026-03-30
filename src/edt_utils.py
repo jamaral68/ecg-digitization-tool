@@ -4,19 +4,15 @@ import pandas as pd
 from scipy import interpolate
 
 def convert_to_secmv(xs, ys, wp, hp, ws, baseline, pulse_per_sec, pulse_per_mv):
-    '''
-    INPUTS:
-        xs: x-axis in points
-        ys: y-axis in points
-        wp: pulse width in points
-        hp: pulse height in points
-        baseline: segment baseline in points
-        ws: segment width in points
-    '''
-    zero_line = ws - baseline
-    ymv = (ys - zero_line) / (hp * pulse_per_mv)
-    sec_per_pts = (pulse_per_sec / wp)
-    xsec = sec_per_pts * np.asarray(xs)
+    baseline_px = np.median(ys)
+
+    mm_per_px_y = 1.0 / hp   
+
+    ymv = (ys - baseline_px) * mm_per_px_y / pulse_per_mv
+
+    sec_per_px = pulse_per_sec / wp
+    xsec = sec_per_px * np.asarray(xs)
+
     return xsec, ymv
 
 def interpolate_segment(x, y, num):
