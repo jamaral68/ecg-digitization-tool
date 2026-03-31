@@ -1,33 +1,13 @@
-"""
-# config ideal 
-# name_model - yolov8s.pt
-# epochs - 200
-# imgsz - 768
-# workers - 4
-def train_model(name_model, data, epochs, imgsz, batch, device, workers):
-    
-    model = YOLO(name_model)
-    model.train(
-        data=data,
-        epochs=epochs,
-        imgsz=imgsz,
-        batch=batch,
-        device=device,
-        workers=workers
-    )
-
-
-    return model 
-
-"""
 import cv2 as cv
 import numpy as np
 from ultralytics import YOLO
-from edt_utils import segment_to_df
+from edt_utils import segment_to_df, draw_overlay
 
-def ecg_to_csv(setup, model: YOLO):
+
+def ecg_to_csv(setup, model: YOLO, save_overlay=True):
     """
     Extract ECG signals from an image using YOLO and return a DataFrame.
+    Optionally saves an overlay image for debugging.
     """
     results = model(setup.image)
     results[0].save()
@@ -36,39 +16,47 @@ def ecg_to_csv(setup, model: YOLO):
     img = cv.imread(setup.image)
     if img is None:
         raise FileNotFoundError(f"Image not found: {setup.image}")
-    
+
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    line_list = []
 
-    line_list = []  # List to store each lead's waveform data
-
-    # Iterate over detected bounding boxes from YOLO
     for box in result.boxes:
-
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-
         cls_id = int(box.cls[0])
-
         lead_name = model.names[cls_id]
 
         if lead_name.lower() == 'pulse':
             continue
 
-        crop = img_gray[y1:y2, max(0, x1+10):min(img_gray.shape[1], x2-10)]
+        crop = img_gray[y1:y2, max(0, x1 + 10):min(img_gray.shape[1], x2 - 10)]
         height, width = crop.shape
+        if width < 2 or height < 2:
+            continue
 
-        yseg = np.array([height - np.argmin(crop[:, col]) for col in range(width)])
-
+        yseg = np.array([np.argmin(crop[:, col]) for col in range(width)])
 
         line_list.append({
-            'wpulse': width,           # Width of the cropped segment
-            'hpulse': height,          # Height of the cropped segment
+            'wpulse': width,
+            'hpulse': height,
             'curves': [{
-                'xseg': np.arange(width),  # X-axis positions of the waveform
-                'yseg': yseg,              # Extracted waveform values
-                'wseg': width,             # Segment width
-                'name': lead_name          # Lead name
+                'xseg': np.arange(width),
+                'yseg': yseg,
+                'wseg': width,
+                'name': lead_name
             }]
         })
 
-    df = segment_to_df(line_list, setup.pulse_per_sec, setup.pulse_per_mv, setup.num_sampling_points)
+    df = segment_to_df(
+        line_list,
+        setup.pulse_per_sec,
+        setup.pulse_per_mv,
+        setup.num_sampling_points
+    )
+
+    # Save overlay
+    if save_overlay:
+        overlay_img = draw_overlay(setup.image, result, model)
+        overlay_path = setup.csv_name.replace(".csv", "_overlay.png")
+        cv.imwrite(overlay_path, overlay_img)
+
     return df
