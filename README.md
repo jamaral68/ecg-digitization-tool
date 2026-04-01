@@ -29,16 +29,3 @@ pip install -r requirements.txt
 python main.py 
 
 ```
-
-## Configuration Variables
-
-| Variable | Description |
-|----------|-------------|
-| `image` | Path to the ECG image |
-| `csv_name` | Output CSV file name |
-| `pulse_per_sec` | Pulse width in seconds |
-| `pulse_per_mv` | Pulse height in millivolts |
-| `sample_frequency` | Sampling frequency (Hz) |
-| `num_sampling_points` | Number of sampling points per lead |
-| `hpulse` | Computed pulse height in pixels (internal use) |
-| `wpulse` | Computed pulse width in pixels (internal use) |
