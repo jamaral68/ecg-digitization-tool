@@ -7,8 +7,7 @@ from scipy import ndimage
 from matplotlib import pyplot as plt
 from PIL import Image
 import skimage as ski
-import pytesseract
-from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df, remove_text
+from edt_utils import is_nan, py_blockproc, display_segments, detect_ref_pulse, print_line_dict,segment_to_df
 from ss import pattern_match
 from edt_utils import process_line,get_values_from_img,measure_extract_pulse ,plot_ecg, extract_image
 from scipy.signal import find_peaks
@@ -168,38 +167,18 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.show()
         print("INFO: Binary image Shape {}.".format(th1.shape))
 
+
+    #foreground is the inverted image ( background = black and the signal is white)
     if dilation != 0:    
         foreground  = cv.morphologyEx(255-th1,cv.MORPH_DILATE,np.ones((3,3)),iterations=dilation)
     else:
         foreground = 255-th1
 
+    if verbose > 1:
+        plt.imshow(foreground, cmap="gray")
+        plt.show()
 
-    # contours, _ = cv.findContours(foreground, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
-    # rectangular_contours = get_rectangular_contours(contours)
-
-    # if verbose > 1:
-    #     plt.imshow(foreground, cmap="gray")
-    #     plt.show()
-
-    # contour_image = image_gray.copy()
-
-    # # find the biggest countour (c) by the area
-    # c = max(contours, key = cv.contourArea)
-    # x_border,y_border,w_border,h_border = cv.boundingRect(c)
-    # # draw the biggest contour (c) in green
-    # cv.rectangle(contour_image,(x_border,y_border),(x_border+w_border,y_border+h_border),(0,255,0),10)
-
-    # if verbose > 1:
-    #     plt.imshow(contour_image, cmap="gray")
-    #     #TODO: add title
-    #     plt.show()
-
-
-    # # ECG image extracted from the main image
-    
-
-    # foreground  = 255-th1[y_border+BORDER_GAP:y_border+h_border-BORDER_GAP,
-    #                     x_border+BORDER_GAP:x_border+w_border-BORDER_GAP]
+   
     if verbose > 0:
         plt.imshow(foreground, cmap = "gray")
         plt.show()
@@ -213,7 +192,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         print('Cannot open the template: ' + template_name)
         new_template = None
     else:
-        #load template to find the pulse
+        #load template to find the pulse. The new_template is also with the background = black and the signal = white)
         _, new_template = cv.threshold(template, 127, 255, cv.THRESH_OTSU)
         new_template = (new_template != 255) * np.uint8(255)
         
@@ -221,7 +200,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         plt.imshow(new_template, cmap = "gray")
         plt.show()
 
-    # Extract the individual leads (lines)
+    # Extract the individual lines. If the format is (3,4). It extract four lines: the three lines plus the rhythm
 
     temp= py_blockproc(foreground,(1,foreground.shape[1]), func=0)
     median_temp = np.median(temp.flatten())
@@ -230,22 +209,20 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     highest_peak_index = peak_indices[np.argsort(peak_heights)]
 
-
-
     if verbose > 0 :
         plt.plot(temp.flatten())
-        # get the leads and the rhythm
+        # get the lines and the rhythm
+        #plot shows the max standard deviation, which corresponds to the base of each line 
         plt.plot(highest_peak_index[-(layout[0]+1):], temp[highest_peak_index[-(layout[0]+1):]], "x")
         plt.plot(median_temp*np.ones_like(temp), "--", color="gray")
         plt.show()
 
     # Calculate the distance between selected peaks
+    # evaluate the size of the slice
 
     ordered_hp_index = sorted(highest_peak_index[-(layout[0]+1):])
-
-
     peak_dist = [np.abs(t - s) for s, t in zip(ordered_hp_index, ordered_hp_index[1:])]
-    max_dist = int(np.round(max(peak_dist)*perc_max_dist,0))
+    max_dist = int(np.round(max(peak_dist)*perc_max_dist,0)) # Calculate a percentage of the maximum peak distance
 
     # Cut the image according to the number of rows in the layout
     # slices_x is a list of tuples
@@ -258,9 +235,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         print("INFO: slices: {}". format(slices_x))
 
 
-    # Create a list to store the processed lines
-
-    proc_line_list =[]
+    proc_line_list =[] # Create a list to store the processed lines
 
     h, w = foreground.shape
     blank_image =  np.zeros(shape=(h, w), dtype=np.uint8)
@@ -278,8 +253,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                         [1, 1, 1]], np.uint8)
     
 
-        labeled_line, nb = ndimage.label(line, structure=structure)
-
+        labeled_line, nb = ndimage.label(line, structure=structure) # segment the line
 
         if verbose > 0:
             print("INFO: Number of segments {} on line {}.".format(nb, i))
@@ -287,39 +261,25 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
         
         
         if (pulse == -1) or (i in pulse) :   # Check if the pulse is present
+           
             line_signal = (labeled_line != 0) * np.uint8(255)
-            #line_signal = np.where(labeled_line == 0, 0, 255)
-
-            # plt.imshow(line_signal, cmap = "gray")
-
-            #Try to detect the pulse
+           
+            #Try to detect the pulse if there is a pulse to be detected
             line_copy = line_signal.copy()
-            #line_copy = line_copy.astype("uint8")
-
+           
             template_width, template_height = template.shape
             line_copy_width, line_copy_height = line_copy.shape
             _, _, xt, yt = get_values_from_img(new_template)
             wt, ht = measure_extract_pulse(xt, yt, verbose=0)
             config_dict['hpulse'] = ht #default values
             config_dict['wpulse'] = wt
-
-            # pattern matching 
-            # method = 'euclidean'
-            # _,_,_,line_signal = get_values_from_img(line_copy)
-            # _,_,_,template_signal = get_values_from_img(new_template)
-
-            # #put the same baseline
-            # baseline = np.argmax(np.std(line_copy, axis =1))
-
-
-            # y_best = pattern_match(np.array(line_signal), np.array(template_signal+baseline),method)
-            # print('DEBUG: pulse detected by template in line {} in {}'.format(i, y_best))
-
-
+  
             # Pulse detection by template
-            detected,location,  similarity_value, x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template)
+            # Add threshold in the config dict
+            detected,location,  similarity_value, x,y, wpulse, hpulse= detect_ref_pulse(line_copy, new_template, threshold=0.4)
             print("INFO: line {}: best similarity value = {} in {}". format(i,similarity_value,y))
 
+            # TODO: only put the the value in the wpulse and hpulse for real detection
             if detected :
                 if  location =='right':
                     sliced_labeled_line = labeled_line[:,0:y].copy()
@@ -332,9 +292,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     wpulse = wt
                     hpulse = ht
                  sliced_labeled_line = labeled_line.copy() 
-
-           
-                
+                         
             if verbose > 0:
                 if detected:
                     print('INFO: pulse detected by template in line {} in {}'.format(i,y))
@@ -342,9 +300,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
                     plt.show()
                 else:
                     print('INFO: pulse NOT detected by template in line {}'.format(i))
-                    #sliced_labeled_line = labeled_line.copy() 
-           
-                
+                    #sliced_labeled_line = labeled_line.copy()             
 
         else:
             print("INFO: line {} has no pulse to detect".format(i))
@@ -377,7 +333,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     return ecg_df
 
 # Main program 
-filename = 'bucket/img20250221_12050781'
+filename = 'bucket/img20250221_05271756'
 image_name = filename + '.png'
 template_name = 'bucket/template.png'
 
@@ -385,7 +341,7 @@ csv_name =filename + '.csv'
 layout = (3,4)
 pulse = [0,1,2]  
 rhythm = 4 # which line has the rhythum
-verbose = 1
+verbose = 3
 mmpsec = 25 # 25 mm/seg
 mmpmv = 10 # 10 mm/mV
 pulse_width_mm = 5 # pulse width in mm
@@ -402,7 +358,7 @@ upper=(179,255,220) # dark gray
 thres_value = 127
 kSize2d = 3 
 kSize1d = 3
-perc_space_leads =0.2
+perc_space_leads =0.2 # percentage to determine the space between leads
 dilation = 10
 perc_max_dist = 0.7 
 
