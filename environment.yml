@@ -1,9 +1,8 @@
 name: ecg_env
-
 channels:
+  - pytorch
   - conda-forge
   - defaults
-
 dependencies:
   - python=3.11
   - numpy
@@ -11,8 +10,9 @@ dependencies:
   - matplotlib
   - scipy
   - opencv
-  - pip
-
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
   - pip:
       - ultralytics
-      - torch
