@@ -1,15 +1,17 @@
-name: env_ecg
+name: ecg_env
 channels:
+  - nvidia
   - pytorch
   - conda-forge
+  - defaults
 dependencies:
-  - python=3.10
-  - opencv
+  - python=3.11
   - numpy
   - pandas
-  - matplotlib
   - scipy
-  - pytorch=2.1
+  - matplotlib
+  - opencv
+  - pytorch
   - torchvision
-  - cpuonly
+  - pytorch-cuda=11.8
   - ultralytics
