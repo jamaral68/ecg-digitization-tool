@@ -14,11 +14,12 @@ cd ecg-digitization-tool
 
 ```
 
-2. **Install the dependencies**:
+2. **Create and Activate the Conda Environment**:
 
 ```bash
 
-pip install -r requirements.txt
+conda env create -f environment.yml
+conda activate ecg_env
 
 ```
 
@@ -26,6 +27,7 @@ pip install -r requirements.txt
 
 ```bash
 
+cd src
 python main.py 
 
 ```
