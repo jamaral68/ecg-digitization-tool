@@ -1,5 +1,6 @@
 name: env_ecg
 channels:
+  - pytorch
   - conda-forge
 dependencies:
   - python=3.10
@@ -8,4 +9,7 @@ dependencies:
   - pandas
   - matplotlib
   - scipy
+  - pytorch=2.1
+  - torchvision
+  - cpuonly
   - ultralytics
