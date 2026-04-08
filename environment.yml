@@ -1,18 +1,11 @@
-name: ecg_env
-
+name: env_ecg
 channels:
   - conda-forge
-  - defaults
-
 dependencies:
-  - python=3.11
+  - python=3.10
+  - opencv
   - numpy
   - pandas
   - matplotlib
   - scipy
-  - opencv
-  - pip
-
-  - pip:
-      - ultralytics
-      - torch
+  - ultralytics
