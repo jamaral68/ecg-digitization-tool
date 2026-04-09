@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from edt_utils import segment_to_df, draw_overlay, remove_labels_inpaint
  
@@ -9,14 +10,18 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     Extract ECG signals from an image and return a DataFrame.
  
     """
+
+    img = cv.imread(setup.image)
+    img_view = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    plt.imshow(img_view)
+    plt.show()
+
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
     results = model(setup.image)
     results[0].save()
     result = results[0]
  
-    img = cv.imread(setup.image)
-    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
- 
-    # ── Collect label bounding boxes (absolute coords) ──────────────────────
     label_boxes = []
     if label_model is not None:
         label_results = label_model(setup.image)
@@ -25,7 +30,6 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
             label_boxes.append((lx1, ly1, lx2, ly2))
         print(f"Labels detected: {len(label_boxes)}")
  
-    # ── Calibration pulse ────────────────────────────────────────────────────
     pulse_boxes = [
         box for box in result.boxes
         if model.names[int(box.cls[0])].lower() == 'pulse'
@@ -38,7 +42,6 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
         pulse_per_mv = 10.0
         print("Pulse not detected.")
  
-    # ── Per-lead extraction ──────────────────────────────────────────────────
     line_list = []
     for box in result.boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
@@ -48,12 +51,10 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
         if lead_name.lower() == 'pulse':
             continue
  
-        # Narrow crop slightly to avoid border artefacts
         crop_x1 = max(0, x1 + 10)
         crop_x2 = min(img_gray.shape[1], x2 - 10)
  
         if label_boxes:
-            # Build a full-height slice from the lead's top, then trim below
             full_crop = remove_labels_inpaint(
                 img_gray, label_boxes, x1_lead=crop_x1, y1_lead=y1
             )
@@ -81,7 +82,6 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
         line_list, setup.pulse_per_sec, pulse_per_mv, setup.num_sampling_points
     )
  
-    # ── Overlay ──────────────────────────────────────────────────────────────
     if save_overlay:
         overlay_img = draw_overlay(setup.image, result, model)
  
