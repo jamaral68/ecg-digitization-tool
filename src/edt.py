@@ -8,12 +8,10 @@ from edt_utils import segment_to_df, draw_overlay, remove_labels_inpaint
 def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     """
     Extract ECG signals from an image and return a DataFrame.
- 
     """
 
     img = cv.imread(setup.image)
     img_view = cv.cvtColor(img, cv.COLOR_BGR2RGB)
-    print("INFO: Displaying original ECG")
     plt.imshow(img_view)
     plt.show()
 
@@ -23,7 +21,6 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     results[0].save()
     result = results[0]
     annotated = result.plot()
-    print("INFO: Displaying ECG with YOLO-generated bounding boxes")
     plt.imshow(annotated)
     plt.show()
 
@@ -33,7 +30,6 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
         for box in label_results[0].boxes:
             lx1, ly1, lx2, ly2 = map(int, box.xyxy[0].tolist())
             label_boxes.append((lx1, ly1, lx2, ly2))
-        print(f"Labels detected: {len(label_boxes)}")
  
     pulse_boxes = [
         box for box in result.boxes
@@ -42,10 +38,8 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     if pulse_boxes:
         x1, y1, x2, y2 = map(int, pulse_boxes[0].xyxy[0].tolist())
         pulse_per_mv = (y2 - y1) / 1.0
-        print("Pulse detected.")
     else:
         pulse_per_mv = 10.0
-        print("Pulse not detected.")
  
     line_list = []
     for box in result.boxes:
@@ -82,19 +76,22 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
                 'name': lead_name,
             }]
         })
- 
+
+    if save_overlay:
+        overlay_img = draw_overlay(setup.image, result, model)
+
+        for (lx1, ly1, lx2, ly2) in label_boxes:
+            cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
+
+        overlay_path = setup.csv_name.replace(".csv", "_overlay.png")
+        cv.imwrite(overlay_path, overlay_img)
+
+        overlay_rgb = cv.cvtColor(overlay_img, cv.COLOR_BGR2RGB)
+        plt.imshow(overlay_rgb)
+        plt.show()
+
     df = segment_to_df(
         line_list, setup.pulse_per_sec, pulse_per_mv, setup.num_sampling_points
     )
- 
-    if save_overlay:
-        overlay_img = draw_overlay(setup.image, result, model)
- 
-        # Draw label boxes in red on the overlay so they are visible
-        for (lx1, ly1, lx2, ly2) in label_boxes:
-            cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
- 
-        overlay_path = setup.csv_name.replace(".csv", "_overlay.png")
-        cv.imwrite(overlay_path, overlay_img)
  
     return df
