@@ -28,6 +28,6 @@ conda activate ecg_env
 ```bash
 
 cd src
-python main.py 
+python main.py ../teste.png
 
 ```
