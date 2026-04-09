@@ -13,6 +13,7 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
 
     img = cv.imread(setup.image)
     img_view = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    print("INFO: Displaying original ECG")
     plt.imshow(img_view)
     plt.show()
 
@@ -21,7 +22,11 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     results = model(setup.image)
     results[0].save()
     result = results[0]
- 
+    annotated = result.plot()
+    print("INFO: Displaying ECG with YOLO-generated bounding boxes")
+    plt.imshow(annotated)
+    plt.show()
+
     label_boxes = []
     if label_model is not None:
         label_results = label_model(setup.image)
