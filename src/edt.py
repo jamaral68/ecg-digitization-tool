@@ -21,7 +21,8 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     results[0].save()
     result = results[0]
     annotated = result.plot()
-    plt.imshow(annotated)
+    annotated_view = cv.cvtColor(annotated, cv.COLOR_BGR2RGB)
+    plt.imshow(annotated_view)
     plt.show()
 
     label_boxes = []
