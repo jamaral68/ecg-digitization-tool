@@ -1,8 +1,10 @@
 import streamlit as st
 import tempfile
+import matplotlib.pyplot as plt
 from ultralytics import YOLO
 from setup import Setup
 from edt import ecg_to_csv
+from edt_utils import plot_ecg
 
 st.title("ECG-DIGITIZATION-TOOL", text_alignment="left")
 
@@ -22,7 +24,6 @@ with col4:
 
 pulse_per_sec       = pulse_width_mm / mmpsec
 num_sampling_points = int(time_lead * sample_frequency)
-layout = (3, 4)
 lead_order = [
     'I',   'aVR', 'V1', 'V4',
     'II',  'aVL', 'V2', 'V5',
@@ -54,3 +55,21 @@ if arquivo is not None:
 
         df = ecg_to_csv(setup, model, label_model=label_model, save_overlay=True)
         
+        if df is not None:
+            fig = plot_ecg(
+                df=df,
+                columns=lead_order,
+                title="ECG Digitalizado - "+arquivo.name,
+                n_rows=3,
+                n_columns=4,
+                fs=sample_frequency
+            )
+
+            st.pyplot(fig)
+
+            st.download_button(
+                label="Baixar CSV",
+                data=df.to_csv(index=False).encode("utf-8-sig"),
+                file_name=csv_name,
+                mime="text/csv"
+            )
