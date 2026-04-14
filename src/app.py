@@ -93,7 +93,7 @@ if arquivo is not None:
             )
 
             st.download_button(
-                label="📦 Baixar tudo (CSV + imagens)",
+                label="📦 Download (CSV + images)",
                 data=zip_file,
                 file_name="ecg_resultados.zip",
                 mime="application/zip"
