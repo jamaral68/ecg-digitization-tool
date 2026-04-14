@@ -3,8 +3,6 @@
 ## Summary
 This project is a tool designed to extract individual ECG signals from scanned paper ECG records, converting them into digital data for further analysis, research, or clinical use.
 
-The application uses a Streamlit interface combined with YOLO-based models to detect and reconstruct ECG signals from images.
-
 ## Installation
 
 1. **Clone the repository**:
