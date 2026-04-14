@@ -1,5 +1,8 @@
 import streamlit as st
+import tempfile
 from ultralytics import YOLO
+from setup import Setup
+from edt import ecg_to_csv
 
 st.title("ECG-DIGITIZATION-TOOL", text_alignment="left")
 
@@ -32,7 +35,22 @@ label_model = YOLO("labels.pt")
 arquivo = st.file_uploader("Carregar arquivo", type=["jpg", "jpeg", "png"], accept_multiple_files=False)
 
 if arquivo is not None:
-    st.write("Arquivo carregado:", arquivo.name)
     st.image(arquivo)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
+        tmp.write(arquivo.getbuffer())
+        caminho = tmp.name
+    
     if st.button('Scan'):
-        print('Button clicked')
+        name = arquivo.name    
+        csv_name = name.rsplit('.', 1)[0] + '.csv'
+
+        setup = Setup(
+            image=caminho,
+            csv_name=csv_name,
+            pulse_per_sec=pulse_per_sec,
+            sample_frequency=sample_frequency,
+            num_sampling_points=num_sampling_points,
+        )
+
+        df = ecg_to_csv(setup, model, label_model=label_model, save_overlay=True)
+        
