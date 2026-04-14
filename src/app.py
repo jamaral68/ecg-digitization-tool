@@ -6,24 +6,24 @@ from setup import Setup
 from edt import ecg_to_csv
 from edt_utils import plot_ecg, create_zip
 
-st.title("ECG-DIGITIZATION-TOOL", text_alignment="left")
+st.title("ECG DIGITIZATION TOOL", anchor=False)
 
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
-    pulse_width_mm = st.number_input('Pulse per mm width', value=500)
+    pulse_width_mm = st.number_input('Pulse width (per mm)', value=500)
 
 with col2:
-    mmpsec = st.number_input('Millimeter per second', value=25)
+    mm_per_sec = st.number_input('Millimeters per second', value=25)
 
 with col3:
-    sample_frequency = st.number_input('Sample frequency', value=500)
+    sample_frequency = st.number_input('Sampling frequency', value=500)
 
 with col4:
-    time_lead = st.number_input('Time lead', value=2.5)
+    lead_time = st.number_input('Lead duration (seconds)', value=2.5)
 
-pulse_per_sec = pulse_width_mm / mmpsec
-num_sampling_points = int(time_lead * sample_frequency)
+pulse_per_sec = pulse_width_mm / mm_per_sec
+num_sampling_points = int(lead_time * sample_frequency)
 
 lead_order = [
     'I', 'aVR', 'V1', 'V4',
@@ -34,24 +34,24 @@ lead_order = [
 model = YOLO("best.pt")
 label_model = YOLO("labels.pt")
 
-arquivo = st.file_uploader(
-    "Carregar arquivo",
+uploaded_file = st.file_uploader(
+    "Upload file",
     type=["jpg", "jpeg", "png"]
 )
 
-if arquivo is not None:
-    st.image(arquivo)
+if uploaded_file is not None:
+    st.image(uploaded_file)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
-        tmp.write(arquivo.getbuffer())
-        caminho = tmp.name
+        tmp.write(uploaded_file.getbuffer())
+        file_path = tmp.name
 
     if st.button("Scan"):
 
-        csv_name = arquivo.name.rsplit(".", 1)[0] + ".csv"
+        csv_name = uploaded_file.name.rsplit(".", 1)[0] + ".csv"
 
         setup = Setup(
-            image=caminho,
+            image=file_path,
             csv_name=csv_name,
             pulse_per_sec=pulse_per_sec,
             sample_frequency=sample_frequency,
@@ -61,12 +61,12 @@ if arquivo is not None:
         df = ecg_to_csv(setup, model, label_model=label_model, save_overlay=True)
 
         if df is not None:
-            st.success("Processamento concluído!")
+            st.success("Processing completed!")
 
             fig = plot_ecg(
                 df=df,
                 columns=lead_order,
-                title="ECG Digitalizado - " + arquivo.name,
+                title="Digitized ECG - " + uploaded_file.name,
                 n_rows=3,
                 n_columns=4,
                 fs=sample_frequency
@@ -79,10 +79,11 @@ if arquivo is not None:
             with open(overlay_path, "rb") as f:
                 overlay_bytes = f.read()
 
-            results = model(caminho)[0]
+            results = model(file_path)[0]
             yolo_img = results.plot()
             _, yolo_buffer = cv.imencode(".png", yolo_img)
             yolo_bytes = yolo_buffer.tobytes()
+
             csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
 
             zip_file = create_zip(
@@ -93,8 +94,8 @@ if arquivo is not None:
             )
 
             st.download_button(
-                label="📦 Download (CSV + images)",
+                label="Download (CSV + images)",
                 data=zip_file,
-                file_name="ecg_resultados.zip",
+                file_name="ecg_results.zip",
                 mime="application/zip"
             )
