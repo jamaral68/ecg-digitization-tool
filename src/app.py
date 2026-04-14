@@ -4,7 +4,7 @@ import cv2 as cv
 from ultralytics import YOLO
 from setup import Setup
 from edt import ecg_to_csv
-from edt_utils import plot_ecg
+from edt_utils import plot_ecg, create_zip
 
 st.title("ECG-DIGITIZATION-TOOL", text_alignment="left")
 
