@@ -1,7 +1,9 @@
 # Ecg-digitization-tool
 
 ## Summary
-This project is a tool designed to extract individual ECG signals from scanned paper ECG records, so that the data can be recovered digitally and be used for further research or diagnoses.
+This project is a tool designed to extract individual ECG signals from scanned paper ECG records, converting them into digital data for further analysis, research, or clinical use.
+
+The application uses a Streamlit interface combined with YOLO-based models to detect and reconstruct ECG signals from images.
 
 ## Installation
 
@@ -28,6 +30,14 @@ conda activate ecg_env
 ```bash
 
 cd src
-python main.py ../teste.png
+streamlit run app.py
+
+```
+
+4. **Open your browser (usually automatically) at**:
+
+```bash
+
+http://localhost:8501
 
 ```
