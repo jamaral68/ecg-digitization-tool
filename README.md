@@ -18,8 +18,13 @@ cd ecg-digitization-tool
 
 ```bash
 
-conda env create -f environment.yml
-conda activate ecg_env
+# CPU
+conda env create -f env_cpu.yml
+conda activate ecg_env_cpu
+
+# GPU
+conda env create -f env_gpu.yml
+conda activate ecg_env_gpu
 
 ```
 
