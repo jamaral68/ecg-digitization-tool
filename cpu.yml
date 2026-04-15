@@ -1,0 +1,20 @@
+name: ecg_env_cpu
+
+channels:
+  - pytorch
+  - conda-forge
+
+dependencies:
+  - python=3.10
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - pytorch=2.1
+  - torchvision
+  - opencv
+  - streamlit
+
+  - pip
+  - pip:
+      - ultralytics

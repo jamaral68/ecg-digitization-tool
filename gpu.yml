@@ -1,4 +1,5 @@
-name: ecg_env
+name: ecg_env_gpu
+
 channels:
   - pytorch
   - nvidia
