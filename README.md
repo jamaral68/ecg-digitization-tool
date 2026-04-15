@@ -33,14 +33,6 @@ conda activate ecg_env_gpu
 ```bash
 
 cd src
-streamlit run app.py
-
-```
-
-4. **Open your browser (usually automatically) at**:
-
-```bash
-
-http://localhost:8501
+python main.py ../teste.png
 
 ```
