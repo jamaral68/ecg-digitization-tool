@@ -138,14 +138,3 @@ def plot_ecg(df, columns, title, n_rows=4, n_columns=4, fs=500, figure_size=(20,
  
     plt.subplots_adjust(top=0.92, hspace=0.45, wspace=0.5)
     return fig
- 
-def create_zip(csv_bytes, overlay_img, yolo_img, csv_name):
-    zip_buffer = io.BytesIO()
-
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        zip_file.writestr(csv_name, csv_bytes)
-        zip_file.writestr("overlay.png", overlay_img)
-        zip_file.writestr("yolo_bbox.png", yolo_img)
-
-    zip_buffer.seek(0)
-    return zip_buffer
