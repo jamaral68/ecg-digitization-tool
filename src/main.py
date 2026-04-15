@@ -27,6 +27,7 @@ if __name__ == "__main__":
 
     model       = YOLO("best.pt")
     label_model = YOLO("labels.pt")
+    metrics = model.val(data="data.yaml")
 
     for image in args.images:
         csv_name = image.rsplit('.', 1)[0] + '.csv'
@@ -51,4 +52,9 @@ if __name__ == "__main__":
         df.to_csv(setup.csv_name, index=False)
         print(f"INFO: Saved {csv_name}")
 
+
+    print(f"mAP50-95: {metrics.box.map:.4f}")
+    print(f"mAP50:    {metrics.box.map50:.4f}")
+    print(f"Precision: {metrics.box.mp:.4f}")
+    print(f"Recall:    {metrics.box.mr:.4f}")
     print("THE END")

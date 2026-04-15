@@ -1,0 +1,19 @@
+train: ../dataset/images/train
+val: ../dataset/images/val
+
+nc: 13
+names: [
+  'pulse',
+  'I',
+  'aVR',
+  'V1',
+  'V4',
+  'II',
+  'aVL',
+  'V2',
+  'V5',
+  'III',
+  'aVF',
+  'V3',
+  'V6'
+]
