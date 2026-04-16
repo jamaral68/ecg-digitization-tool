@@ -2,8 +2,7 @@ import cv2 as cv
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import io
-import zipfile
+import torch
 from scipy import interpolate
 from scipy.signal import medfilt
  
@@ -161,3 +160,30 @@ def train_model(model, dataloader, optimizer, device, epochs=10):
         
         print(f"Epoch {epoch+1}: Loss = {total_loss:.4f}")
 
+def predict_and_draw(model, image, device, threshold=0.5):
+    model.eval()
+    
+    img_tensor = torch.from_numpy(image / 255.).permute(2, 0, 1).float().to(device)
+    
+    with torch.no_grad():
+        prediction = model([img_tensor])[0]
+    
+    boxes = prediction['boxes'].cpu().numpy()
+    scores = prediction['scores'].cpu().numpy()
+    labels = prediction['labels'].cpu().numpy()
+    
+    img_out = image.copy()
+    
+    for box, score, label in zip(boxes, scores, labels):
+        if score < threshold:
+            continue
+        
+        x1, y1, x2, y2 = map(int, box)
+        
+        cv.rectangle(img_out, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv.putText(img_out, f"Lead {label}: {score:.2f}",
+                    (x1, y1 - 5),
+                    cv.FONT_HERSHEY_SIMPLEX,
+                    0.5, (0, 255, 0), 1)
+    
+    return img_out
