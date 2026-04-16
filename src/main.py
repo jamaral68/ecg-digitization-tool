@@ -1,15 +1,9 @@
 import argparse
-import matplotlib.pyplot as plt
-from setup import Setup
-from edt_utils import plot_ecg
-from edt import ecg_to_csv
-from ultralytics import YOLO
-
+import torch
+import cv2 as cv
+from edt_utils import get_model, predict_and_draw
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract ECG signals from an image.")
-    parser.add_argument("images", type=str, nargs='+', help="Path to one or more ECG image files")
-    args = parser.parse_args()
 
     pulse_width_mm      = 500
     mmpsec              = 25
@@ -25,38 +19,24 @@ if __name__ == "__main__":
         'III', 'aVF', 'V3', 'V6',
     ]
 
-    model       = YOLO("best.pt")
-    label_model = YOLO("labels.pt")
-    metrics = model.val(data="data.yaml")
+    parser = argparse.ArgumentParser(description="Extract ECG signals from an image.")
+    parser.add_argument("images", type=str, nargs='+')
+    args = parser.parse_args()
 
-    for image in args.images:
-        csv_name = image.rsplit('.', 1)[0] + '.csv'
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        setup = Setup(
-            image=image,
-            csv_name=csv_name,
-            pulse_per_sec=pulse_per_sec,
-            sample_frequency=sample_frequency,
-            num_sampling_points=num_sampling_points,
-        )
+    model = get_model(num_classes=14)
+    model.load_state_dict(torch.load("faster_rcnn_ecg.pth", map_location=device))
+    model.to(device)
+    model.eval()
 
-        df = ecg_to_csv(setup, model, label_model=label_model, save_overlay=True)
+    for img_path in args.images:
+        image = cv.imread(img_path)
+        image = cv.cvtColor(image, cv.COLOR_BGR2RGB)
 
-        fig = plot_ecg(
-            df, lead_order, title=f"ECG - {image}",
-            n_rows=layout[0], n_columns=layout[1],
-            fs=setup.sample_frequency,
-        )
-        plt.show()
+        result = predict_and_draw(model, image, device)
 
-        df.to_csv(setup.csv_name, index=False)
-        print(f"INFO: Saved {csv_name}")
+        out_path = "result_" + img_path.split("/")[-1]
+        cv.imwrite(out_path, cv.cvtColor(result, cv.COLOR_RGB2BGR))
 
-    print("=======================================")
-    print("METRICS")
-    print(f"mAP50-95: {metrics.box.map:.4f}")
-    print(f"mAP50:    {metrics.box.map50:.4f}")
-    print(f"Precision: {metrics.box.mp:.4f}")
-    print(f"Recall:    {metrics.box.mr:.4f}")
-    print("=======================================")
-    print("THE END")
+        print(f"Saved: {out_path}")
