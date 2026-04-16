@@ -52,3 +52,4 @@ class YOLODataset(torch.utils.data.Dataset):
         img = torch.as_tensor(img / 255., dtype=torch.float32).permute(2, 0, 1)
 
         return img, target
+    
