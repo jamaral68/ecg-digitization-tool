@@ -5,7 +5,7 @@ from ultralytics import YOLO
 from edt_utils import segment_to_df, draw_overlay, remove_labels_inpaint
  
  
-def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
+def ecg_to_csv(setup, model, label_model: YOLO = None, save_overlay=True):
     """
     Extract ECG signals from an image and return a DataFrame.
     """
