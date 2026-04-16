@@ -187,3 +187,6 @@ def predict_and_draw(model, image, device, threshold=0.5):
                     0.5, (0, 255, 0), 1)
     
     return img_out
+
+def collate_fn(batch):
+    return tuple(zip(*batch))
