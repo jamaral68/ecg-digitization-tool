@@ -193,18 +193,10 @@ def predict_and_draw(model, image, device, threshold=0.5):
 def collate_fn(batch):
     return tuple(zip(*batch))
 
-def get_model_lead(num_classes):
+def get_model(num_classes):
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights="DEFAULT")
     
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     
-    return model
-
-def get_model_label(num_classes):
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights="DEFAULT")
-
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-
     return model

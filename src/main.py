@@ -4,7 +4,7 @@ import cv2 as cv
 import torchvision.transforms.functional as F
 import matplotlib.pyplot as plt
 from edt import ecg_to_csv
-from edt_utils import get_model_label, get_model_lead, plot_ecg
+from edt_utils import get_model, plot_ecg
 from setup import Setup
 
 
@@ -56,13 +56,13 @@ if __name__ == "__main__":
     # =========================
 
     # Modelo de leads (14 classes)
-    model_leads = get_model_lead(num_classes=14)
+    model_leads = get_model(num_classes=14)
     model_leads.load_state_dict(torch.load("CNN-leads.pth", map_location=device))
     model_leads.to(device)
     model_leads.eval()
 
     # Modelo de labels (2 classes = background + label)
-    model_label = get_model_label(num_classes=2)
+    model_label = get_model(num_classes=2)
     model_label.load_state_dict(torch.load("CNN-labels.pth", map_location=device))
     model_label.to(device)
     model_label.eval()
