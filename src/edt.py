@@ -3,13 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torchvision.transforms.functional as F
-from edt_utils import (
-    predict_and_draw,
-    remove_labels_inpaint,
-    segment_to_df
-)
 
-# Mapeamento manual de classes do modelo Faster R-CNN
+from edt_utils import predict_and_draw, remove_labels_inpaint, segment_to_df
+
+# Classes do modelo de leads
 CLASS_NAMES = {
     0: 'background',
     1: 'pulse',
@@ -28,48 +25,73 @@ CLASS_NAMES = {
 }
 
 
-def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
+def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
 
     img = cv.imread(setup.image)
 
     if img is None:
         raise ValueError(f"Não foi possível carregar a imagem: {setup.image}")
 
-    # Mostrar imagem original
+    # =========================
+    # Visualização original
+    # =========================
     plt.figure()
     plt.imshow(cv.cvtColor(img, cv.COLOR_BGR2RGB))
     plt.title("Imagem original")
     plt.axis("off")
     plt.show()
 
-    # Visualização inicial (debug)
-    img_out = predict_and_draw(model, img, device, threshold=0.5)
+    # =========================
+    # Leads detection preview
+    # =========================
+    img_out = predict_and_draw(model_leads, img, device, threshold=0.5)
 
     plt.figure()
     plt.imshow(cv.cvtColor(img_out, cv.COLOR_BGR2RGB))
-    plt.title("Detecção ECG")
+    plt.title("Detecção ECG (Leads)")
     plt.axis("off")
     plt.show()
 
-    # Inferência Faster R-CNN
-    model.eval()
-    img_tensor = F.to_tensor(cv.cvtColor(img, cv.COLOR_BGR2RGB)).to(device)
+    # =========================
+    # Faster R-CNN inference (LEADS)
+    # =========================
+    model_leads.eval()
+
+    img_tensor = F.to_tensor(
+        cv.cvtColor(img, cv.COLOR_BGR2RGB)
+    ).to(device)
 
     with torch.no_grad():
-        result = model([img_tensor])[0]
+        result_leads = model_leads([img_tensor])[0]
 
-    # YOLO (labels opcionais)
+    # =========================
+    # Faster R-CNN inference (LABELS MODEL)
+    # =========================
     label_boxes = []
+
     if label_model is not None:
-        label_results = label_model(setup.image)
-        for box in label_results[0].boxes:
-            lx1, ly1, lx2, ly2 = map(int, box.xyxy[0].tolist())
+        label_model.eval()
+
+        with torch.no_grad():
+            result_labels = label_model([img_tensor])[0]
+
+        for box, score in zip(result_labels['boxes'], result_labels['scores']):
+            if score < 0.5:
+                continue
+
+            lx1, ly1, lx2, ly2 = map(int, box.tolist())
             label_boxes.append((lx1, ly1, lx2, ly2))
 
-    # Calibração (pulso)
+    # =========================
+    # Calibração (pulse)
+    # =========================
     pulse_boxes = [
         box
-        for box, label, score in zip(result['boxes'], result['labels'], result['scores'])
+        for box, label, score in zip(
+            result_leads['boxes'],
+            result_leads['labels'],
+            result_leads['scores']
+        )
         if score >= 0.5 and CLASS_NAMES.get(int(label), '').lower() == 'pulse'
     ]
 
@@ -81,13 +103,21 @@ def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
 
     print(f"[INFO] pulse_per_mv = {pulse_per_mv}")
 
+    # =========================
     # grayscale
+    # =========================
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    # Extração das curvas
+    # =========================
+    # Extração dos leads
+    # =========================
     line_list = []
 
-    for box, label, score in zip(result['boxes'], result['labels'], result['scores']):
+    for box, label, score in zip(
+        result_leads['boxes'],
+        result_leads['labels'],
+        result_leads['scores']
+    ):
 
         if score < 0.5:
             continue
@@ -101,6 +131,7 @@ def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
         crop_x1 = max(0, x1 + 10)
         crop_x2 = min(img_gray.shape[1], x2 - 10)
 
+        # remove labels se existir segundo modelo
         if label_boxes:
             full_crop = remove_labels_inpaint(
                 img_gray,
@@ -115,21 +146,20 @@ def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
         if crop.size == 0:
             continue
 
-        height, width = crop.shape
+        h, w = crop.shape
 
-        if width < 2 or height < 2:
+        if w < 2 or h < 2:
             continue
 
-        # linha do ECG (mínimo por coluna)
         yseg = np.argmin(crop, axis=0)
 
         line_list.append({
-            'wpulse': width,
-            'hpulse': height,
+            'wpulse': w,
+            'hpulse': h,
             'curves': [{
-                'xseg': np.arange(width),
+                'xseg': np.arange(w),
                 'yseg': yseg,
-                'wseg': width,
+                'wseg': w,
                 'name': lead_name,
             }]
         })
@@ -137,19 +167,23 @@ def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
     print(f"[INFO] Leads detectados: {[l['curves'][0]['name'] for l in line_list]}")
 
     # =========================
-    # OVERLAY (Faster R-CNN)
+    # OVERLAY (2x Faster R-CNN)
     # =========================
     if save_overlay:
         overlay_img = img.copy()
 
-        for box, label, score in zip(result['boxes'], result['labels'], result['scores']):
+        # leads (verde)
+        for box, label, score in zip(
+            result_leads['boxes'],
+            result_leads['labels'],
+            result_leads['scores']
+        ):
             if score < 0.5:
                 continue
 
             x1, y1, x2, y2 = map(int, box.tolist())
             name = CLASS_NAMES.get(int(label), str(label))
 
-            # caixa verde (leads)
             cv.rectangle(overlay_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv.putText(
                 overlay_img,
@@ -161,7 +195,7 @@ def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
                 1
             )
 
-        # caixas vermelhas (labels YOLO)
+        # labels model (vermelho)
         for (lx1, ly1, lx2, ly2) in label_boxes:
             cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
 
@@ -170,7 +204,7 @@ def ecg_to_csv(setup, model, device, label_model=None, save_overlay=True):
 
         plt.figure()
         plt.imshow(cv.cvtColor(overlay_img, cv.COLOR_BGR2RGB))
-        plt.title("Overlay ECG (Faster R-CNN + Labels)")
+        plt.title("Overlay ECG (Leads + Labels - Faster R-CNN)")
         plt.axis("off")
         plt.show()
 
