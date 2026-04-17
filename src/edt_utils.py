@@ -140,27 +140,7 @@ def plot_ecg(df, columns, title, n_rows=4, n_columns=4, fs=500, figure_size=(20,
     plt.subplots_adjust(top=0.92, hspace=0.45, wspace=0.5)
     return fig
 
-def train_model(model, dataloader, optimizer, device, epochs=10):
-    model.to(device)
-    model.train()
-    
-    for epoch in range(epochs):
-        total_loss = 0
-        
-        for images, targets in dataloader:
-            images = [img.to(device) for img in images]
-            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
-            
-            loss_dict = model(images, targets)
-            losses = sum(loss for loss in loss_dict.values())
-            
-            optimizer.zero_grad()
-            losses.backward()
-            optimizer.step()
-            
-            total_loss += losses.item()
-        
-        print(f"Epoch {epoch+1}: Loss = {total_loss:.4f}")
+
 
 def predict_and_draw(model, image, device, threshold=0.5):
     model.eval()
