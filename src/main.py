@@ -1,7 +1,8 @@
 import argparse
 import torch
+import matplotlib.pyplot as plt
 from edt import ecg_to_csv
-from edt_utils import get_model
+from edt_utils import get_model, plot_ecg
 from setup import Setup
 
 if __name__ == "__main__":
@@ -41,3 +42,13 @@ if __name__ == "__main__":
         )
 
     df = ecg_to_csv(setup, model, device, label_model=None, save_overlay=True)
+
+    fig = plot_ecg(
+            df, lead_order, title=f"ECG - {image}",
+            n_rows=layout[0], n_columns=layout[1],
+            fs=setup.sample_frequency,
+        )
+    plt.show()
+    
+    df.to_csv(setup.csv_name, index=False)
+    print(f"INFO: Saved {csv_name}")
