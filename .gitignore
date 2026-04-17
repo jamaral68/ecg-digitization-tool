@@ -7,5 +7,7 @@
 /ptbxlimage
 __pycache__/
 src/*.pth
+tst/*.pth
+tst/dataset
 /**/labels/*.cache
 /**/runs
