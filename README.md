@@ -36,3 +36,21 @@ cd src
 python main.py ../teste.png
 
 ```
+
+
+## Validation 
+
+1. **Run script**:
+
+```bash
+
+cd tst
+python validate_faster_rcnn.py \
+  --weights <path_to_model.pth> \
+  --images-dir <path_to_validation_images_folder> \
+  --labels-dir <path_to_validation_labels_folder> \
+  --num-classes <number_of_classes_excluding_background> \
+  --class-names <path_to_class_names_txt_file> \
+  --batch-size <number_of_images_per_batch>
+
+```
