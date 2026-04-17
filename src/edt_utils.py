@@ -143,40 +143,59 @@ def plot_ecg(df, columns, title, n_rows=4, n_columns=4, fs=500, figure_size=(20,
 
 
 def predict_and_draw(model, image, device, threshold=0.5):
+    """
+    Runs inference using a Faster R-CNN model and draws predicted bounding boxes on the image.
+    """
     model.eval()
-    
+
     img_tensor = torch.from_numpy(image / 255.).permute(2, 0, 1).float().to(device)
-    
+
     with torch.no_grad():
         prediction = model([img_tensor])[0]
-    
+
     boxes = prediction['boxes'].cpu().numpy()
     scores = prediction['scores'].cpu().numpy()
     labels = prediction['labels'].cpu().numpy()
-    
+
     img_out = image.copy()
-    
+
     for box, score, label in zip(boxes, scores, labels):
         if score < threshold:
             continue
-        
+
         x1, y1, x2, y2 = map(int, box)
-        
+
         cv.rectangle(img_out, (x1, y1), (x2, y2), (0, 255, 0), 2)
-        cv.putText(img_out, f"Lead {label}: {score:.2f}",
-                    (x1, y1 - 5),
-                    cv.FONT_HERSHEY_SIMPLEX,
-                    0.5, (0, 255, 0), 1)
-    
+        cv.putText(
+            img_out,
+            f"Lead {label}: {score:.2f}",
+            (x1, y1 - 5),
+            cv.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            (0, 255, 0),
+            1
+        )
+
     return img_out
 
+
 def collate_fn(batch):
+    """
+    Custom collate function used for object detection datasets.
+    It groups images and targets separately because detection models
+    expect a list of tensors instead of a single stacked tensor.
+    """
     return tuple(zip(*batch))
 
+
 def get_model(num_classes):
+    """
+    Builds a Faster R-CNN model with a ResNet-50-FPN backbone
+    and replaces the classification head to match the number of classes.
+    """
     model = torchvision.models.detection.fasterrcnn_resnet50_fpn(weights="DEFAULT")
-    
+
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    
+
     return model

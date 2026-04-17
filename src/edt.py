@@ -3,10 +3,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch
 import torchvision.transforms.functional as F
-
 from edt_utils import predict_and_draw, remove_labels_inpaint, segment_to_df
 
-# Classes do modelo de leads
 CLASS_NAMES = {
     0: 'background',
     1: 'pulse',
@@ -29,26 +27,18 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
 
     img = cv.imread(setup.image)
 
-    if img is None:
-        raise ValueError(f"Não foi possível carregar a imagem: {setup.image}")
-
-    # =========================
-    # Visualização original
-    # =========================
     plt.figure()
     plt.imshow(cv.cvtColor(img, cv.COLOR_BGR2RGB))
-    plt.title("Imagem original")
+    plt.title("Image original")
     plt.axis("off")
     plt.show()
 
-    # =========================
-    # Leads detection preview
-    # =========================
+
     img_out = predict_and_draw(model_leads, img, device, threshold=0.5)
 
     plt.figure()
     plt.imshow(cv.cvtColor(img_out, cv.COLOR_BGR2RGB))
-    plt.title("Detecção ECG (Leads)")
+    plt.title("ECG Detection (Leads)")
     plt.axis("off")
     plt.show()
 
@@ -82,9 +72,6 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
             lx1, ly1, lx2, ly2 = map(int, box.tolist())
             label_boxes.append((lx1, ly1, lx2, ly2))
 
-    # =========================
-    # Calibração (pulse)
-    # =========================
     pulse_boxes = [
         box
         for box, label, score in zip(
@@ -103,14 +90,8 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
 
     print(f"[INFO] pulse_per_mv = {pulse_per_mv}")
 
-    # =========================
-    # grayscale
-    # =========================
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    # =========================
-    # Extração dos leads
-    # =========================
     line_list = []
 
     for box, label, score in zip(
@@ -131,7 +112,6 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
         crop_x1 = max(0, x1 + 10)
         crop_x2 = min(img_gray.shape[1], x2 - 10)
 
-        # remove labels se existir segundo modelo
         if label_boxes:
             full_crop = remove_labels_inpaint(
                 img_gray,
@@ -166,9 +146,6 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
 
     print(f"[INFO] Leads detectados: {[l['curves'][0]['name'] for l in line_list]}")
 
-    # =========================
-    # OVERLAY (2x Faster R-CNN)
-    # =========================
     if save_overlay:
         overlay_img = img.copy()
 
@@ -195,7 +172,6 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
                 1
             )
 
-        # labels model (vermelho)
         for (lx1, ly1, lx2, ly2) in label_boxes:
             cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
 
@@ -208,9 +184,7 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
         plt.axis("off")
         plt.show()
 
-    # =========================
-    # DataFrame final
-    # =========================
+
     df = segment_to_df(
         line_list,
         setup.pulse_per_sec,
