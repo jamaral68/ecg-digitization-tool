@@ -9,5 +9,6 @@ __pycache__/
 src/*.pth
 tst/*.pth
 tst/dataset
+tst/*.txt
 /**/labels/*.cache
 /**/runs
