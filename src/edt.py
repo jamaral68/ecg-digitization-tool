@@ -22,7 +22,6 @@ CLASS_NAMES = {
     13: 'V6',
 }
 
-
 def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
 
     img = cv.imread(setup.image)
@@ -40,7 +39,7 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
     plt.show()
 
     # =========================
-    # DETECTION PREVIEW
+    # PREVIEW DETECTION
     # =========================
     img_out = predict_and_draw(model_leads, img, device, threshold=0.5)
 
@@ -51,7 +50,7 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
     plt.show()
 
     # =========================
-    # INFERENCE LEADS (Faster R-CNN)
+    # INFERENCE LEADS
     # =========================
     model_leads.eval()
 
@@ -61,7 +60,7 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
         result_leads = model_leads([img_tensor])[0]
 
     # =========================
-    # LABEL MODEL (optional Faster R-CNN)
+    # INFERENCE LABEL MODEL
     # =========================
     label_boxes = []
 
@@ -79,7 +78,7 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
             label_boxes.append((lx1, ly1, lx2, ly2))
 
     # =========================
-    # CALIBRATION (pulse)
+    # CALIBRATION
     # =========================
     pulse_boxes = [
         box
@@ -97,15 +96,13 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
     else:
         pulse_per_mv = 10.0
 
-    print(f"[INFO] pulse_per_mv = {pulse_per_mv}")
-
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
-    # =========================
-    # SIGNAL EXTRACTION (GLOBAL COORDINATES FIXED)
-    # =========================
     line_list = []
 
+    # =========================
+    # SIGNAL EXTRACTION
+    # =========================
     for box, label, score in zip(
         result_leads['boxes'],
         result_leads['labels'],
@@ -124,9 +121,6 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
         crop_x1 = max(0, x1 + 10)
         crop_x2 = min(img_gray.shape[1], x2 - 10)
 
-        # -------------------------
-        # Crop + optional label removal
-        # -------------------------
         if label_boxes:
             full_crop = remove_labels_inpaint(
                 img_gray,
@@ -146,14 +140,8 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
         if w < 2 or h < 2:
             continue
 
-        # =========================
-        # SIGNAL (local)
-        # =========================
         yseg = np.argmin(crop, axis=0)
 
-        # =========================
-        # CONVERT TO GLOBAL COORDINATES (IMPORTANT FIX)
-        # =========================
         x_global = np.arange(w) + crop_x1
         y_global = yseg + y1
 
@@ -163,15 +151,50 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
             'name': lead_name,
         })
 
-    print(f"[INFO] Leads detected: {[l['name'] for l in line_list]}")
-
     # =========================
-    # OVERLAY
+    # OVERLAY + BOXES ONLY
     # =========================
     if save_overlay:
+
+        # -------------------------------------------------
+        # 1. BOXES ONLY IMAGE
+        # -------------------------------------------------
+        boxes_only = img.copy()
+
+        for box, label, score in zip(
+            result_leads['boxes'],
+            result_leads['labels'],
+            result_leads['scores']
+        ):
+            if score < 0.5:
+                continue
+
+            x1, y1, x2, y2 = map(int, box.tolist())
+            name = CLASS_NAMES.get(int(label), str(label))
+
+            cv.rectangle(boxes_only, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv.putText(
+                boxes_only,
+                name,
+                (x1, y1 - 5),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                1
+            )
+
+        for (lx1, ly1, lx2, ly2) in label_boxes:
+            cv.rectangle(boxes_only, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
+
+        boxes_path = setup.csv_name.replace(".csv", "_boxes.png")
+        cv.imwrite(boxes_path, boxes_only)
+
+        # -------------------------------------------------
+        # 2. FULL OVERLAY (with waveform)
+        # -------------------------------------------------
         overlay_img = img.copy()
 
-        # leads boxes
+        # draw boxes
         for box, label, score in zip(
             result_leads['boxes'],
             result_leads['labels'],
@@ -184,23 +207,11 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
             name = CLASS_NAMES.get(int(label), str(label))
 
             cv.rectangle(overlay_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv.putText(
-                overlay_img,
-                name,
-                (x1, y1 - 5),
-                cv.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                1
-            )
 
-        # label boxes
         for (lx1, ly1, lx2, ly2) in label_boxes:
             cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
 
-        # =========================
-        # ECG waveform (NOW PERFECTLY ALIGNED)
-        # =========================
+        # draw waveform
         for curve in line_list:
 
             x = curve['xseg']
@@ -209,7 +220,6 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
             for i in range(len(x) - 1):
                 pt1 = (int(x[i]), int(y[i]))
                 pt2 = (int(x[i + 1]), int(y[i + 1]))
-
                 cv.line(overlay_img, pt1, pt2, (255, 0, 0), 1)
 
         overlay_path = setup.csv_name.replace(".csv", "_overlay.png")
@@ -217,7 +227,7 @@ def ecg_to_csv(setup, model_leads, device, label_model=None, save_overlay=True):
 
         plt.figure()
         plt.imshow(cv.cvtColor(overlay_img, cv.COLOR_BGR2RGB))
-        plt.title("Overlay ECG (Aligned Waveform)")
+        plt.title("Overlay ECG (Waveform + Boxes)")
         plt.axis("off")
         plt.show()
 

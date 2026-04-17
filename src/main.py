@@ -70,3 +70,4 @@ if __name__ == "__main__":
 
     df.to_csv(setup.csv_name, index=False)
     print(f"INFO: Saved {csv_name}")
+    print("THE END")
