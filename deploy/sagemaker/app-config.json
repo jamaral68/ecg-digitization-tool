@@ -1,0 +1,16 @@
+{
+  "AppImageConfigName": "ecg-digitization-tool-config",
+  "KernelGatewayImageConfig": {
+    "KernelSpecs": [
+      {
+        "Name": "ecg-digitization-tool",
+        "DisplayName": "Python (ECG)"
+      }
+    ],
+    "FileSystemConfig": {
+      "MountPath": "/home/sagemaker-user",
+      "DefaultUid": 1000,
+      "DefaultGid": 100
+    }
+  }
+}
