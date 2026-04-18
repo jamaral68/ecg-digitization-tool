@@ -8,11 +8,15 @@ TAG        ?= latest
 IMAGE      ?= $(REPO_NAME):$(TAG)
 PORT       ?= 8888
 
-.PHONY: help build run shell push deploy register deploy-full clean
+.PHONY: help build run shell push deploy register deploy-full clean install-poetry
 
 help:
 	@echo "Targets disponiveis:"
 	@echo ""
+	@echo "  Setup:"
+	@echo "    install-poetry - Instala Poetry e dependencias do projeto"
+	@echo ""
+	@echo "  Docker / SageMaker:"
 	@echo "    build         - Build local da imagem SageMaker (CUDA)"
 	@echo "    run           - Roda o container local com Jupyter em :$(PORT)"
 	@echo "    shell         - Abre bash dentro do container para debug"
@@ -73,6 +77,8 @@ clean:
 
 
 install-poetry:
-	curl -sSL https://install.python-poetry.org | python3 -
-	export PATH="$$HOME/.local/bin:$PATH"
-	poetry install
+	@command -v poetry >/dev/null 2>&1 || curl -sSL https://install.python-poetry.org | python3 -
+	@PATH="$$HOME/.local/bin:$$PATH" poetry install
+	@echo ""
+	@echo ">> Para usar 'poetry' no terminal, adicione ao seu ~/.bashrc:"
+	@echo '     export PATH="$$HOME/.local/bin:$$PATH"'
