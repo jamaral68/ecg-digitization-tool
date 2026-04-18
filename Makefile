@@ -70,3 +70,9 @@ deploy-full: deploy register
 
 clean:
 	-docker rmi $(IMAGE) 2>/dev/null || true
+
+
+install-poetry:
+	curl -sSL https://install.python-poetry.org | python3 -
+	export PATH="$$HOME/.local/bin:$PATH"
+	poetry install
