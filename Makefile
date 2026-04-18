@@ -7,14 +7,19 @@ REPO_NAME  ?= ecg-digitization-tool
 TAG        ?= latest
 IMAGE      ?= $(REPO_NAME):$(TAG)
 PORT       ?= 8888
+STREAMLIT_PORT ?= 8501
 
-.PHONY: help build run shell push deploy register deploy-full clean install-poetry
+.PHONY: help build run shell push deploy register deploy-full clean install-poetry app demo
 
 help:
 	@echo "Targets disponiveis:"
 	@echo ""
 	@echo "  Setup:"
 	@echo "    install-poetry - Instala Poetry e dependencias do projeto"
+	@echo ""
+	@echo "  Streamlit:"
+	@echo "    app           - Roda o app Streamlit localmente (porta $(STREAMLIT_PORT))"
+	@echo "    demo          - Roda o app + tunel ngrok para demos"
 	@echo ""
 	@echo "  Docker / SageMaker:"
 	@echo "    build         - Build local da imagem SageMaker (CUDA)"
@@ -75,6 +80,12 @@ deploy-full: deploy register
 clean:
 	-docker rmi $(IMAGE) 2>/dev/null || true
 
+
+app:
+	poetry run streamlit run app/app.py --server.port $(STREAMLIT_PORT)
+
+demo:
+	poetry run python app/serve_ngrok.py --port $(STREAMLIT_PORT)
 
 install-poetry:
 	@command -v poetry >/dev/null 2>&1 || curl -sSL https://install.python-poetry.org | python3 -
