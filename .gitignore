@@ -14,3 +14,5 @@ datasets/
 .env
 __pycache__/
 deprecated/
+.venv/
+.ipynb_checkpoints/
