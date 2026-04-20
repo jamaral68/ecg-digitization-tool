@@ -3,7 +3,7 @@ import tempfile
 import cv2 as cv
 from ultralytics import YOLO
 from setup import Setup
-from edt import ecg_to_csv
+from edt import ecg_to_csv_yolo
 from edt_utils import plot_ecg, create_zip
 
 st.title("ECG DIGITIZATION TOOL", anchor=False)
@@ -58,7 +58,7 @@ if uploaded_file is not None:
             num_sampling_points=num_sampling_points,
         )
 
-        df = ecg_to_csv(setup, model, label_model=label_model, save_overlay=True)
+        df = ecg_to_csv_yolo(setup, model, label_model=label_model, save_overlay=True)
 
         if df is not None:
             st.success("Processing completed!")
