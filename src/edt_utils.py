@@ -142,13 +142,22 @@ def plot_ecg(df, columns, title, n_rows=4, n_columns=4, fs=500, figure_size=(20,
     plt.subplots_adjust(top=0.92, hspace=0.45, wspace=0.5)
     return fig
  
-def create_zip(csv_bytes, overlay_img, yolo_img, csv_name):
+def create_zip(csv_bytes, overlay_img=None, boxes_img=None, csv_name="ecg.csv"):
+    """
+    Creates a ZIP archive containing ECG processing outputs.
+    """
+
     zip_buffer = io.BytesIO()
 
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
-        zip_file.writestr(csv_name, csv_bytes)
-        zip_file.writestr("overlay.png", overlay_img)
-        zip_file.writestr("bbox.png", yolo_img)
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+
+        zipf.writestr(csv_name, csv_bytes)
+
+        if overlay_img is not None:
+            zipf.writestr("overlay.png", overlay_img)
+
+        if boxes_img is not None:
+            zipf.writestr("boxes.png", boxes_img)
 
     zip_buffer.seek(0)
     return zip_buffer

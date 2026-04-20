@@ -2,7 +2,9 @@ import streamlit as st
 import tempfile
 import cv2 as cv
 import torch
+import os
 from ultralytics import YOLO
+
 from setup import Setup
 from edt import ecg_to_csv_yolo, ecg_to_csv_cnn
 from edt_utils import plot_ecg, create_zip, get_model, predict_and_draw
@@ -10,6 +12,9 @@ from edt_utils import plot_ecg, create_zip, get_model, predict_and_draw
 
 st.title("ECG DIGITIZATION TOOL", anchor=False)
 
+# =========================
+# MODEL SELECTION
+# =========================
 model_choice = st.selectbox(
     "Select detection model",
     ["YOLO", "Faster R-CNN"]
@@ -48,18 +53,16 @@ if model_choice == "YOLO":
     label_model = YOLO("labels.pt")
 
 else:
-    # Faster R-CNN (leads)
     model = get_model(14)
     model.load_state_dict(torch.load("CNN-leads.pth", map_location=device))
     model.to(device)
 
-    # Faster R-CNN (labels)
     label_model = get_model(2)
     label_model.load_state_dict(torch.load("CNN-labels.pth", map_location=device))
     label_model.to(device)
 
 # =========================
-# FILE UPLOAD
+# UPLOAD IMAGE
 # =========================
 uploaded_file = st.file_uploader(
     "Upload file",
@@ -67,7 +70,7 @@ uploaded_file = st.file_uploader(
 )
 
 if uploaded_file is not None:
-    st.image(uploaded_file)
+    st.image(uploaded_file, caption="Uploaded ECG")
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as tmp:
         tmp.write(uploaded_file.getbuffer())
@@ -86,7 +89,7 @@ if uploaded_file is not None:
         )
 
         # =========================
-        # PIPELINE SWITCH
+        # PIPELINE
         # =========================
         if model_choice == "YOLO":
 
@@ -97,7 +100,6 @@ if uploaded_file is not None:
                 save_overlay=True
             )
 
-            # YOLO preview
             results = model(file_path)[0]
             yolo_img = results.plot()
 
@@ -127,39 +129,66 @@ if uploaded_file is not None:
             preview_bytes = buffer.tobytes()
 
         # =========================
-        # OUTPUT
+        # LOAD GENERATED IMAGES
         # =========================
-        if df is not None:
-            st.success("Processing completed!")
+        overlay_path = setup.csv_name.replace(".csv", "_overlay.png")
+        boxes_path = setup.csv_name.replace(".csv", "_boxes.png")
 
-            fig = plot_ecg(
-                df=df,
-                columns=lead_order,
-                title="Digitized ECG - " + uploaded_file.name,
-                n_rows=3,
-                n_columns=4,
-                fs=sample_frequency
-            )
+        overlay_bytes = None
+        boxes_bytes = None
 
-            st.pyplot(fig)
-
-            overlay_path = setup.csv_name.replace(".csv", "_overlay.png")
-
+        if os.path.exists(overlay_path):
             with open(overlay_path, "rb") as f:
                 overlay_bytes = f.read()
 
-            csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+        if os.path.exists(boxes_path):
+            with open(boxes_path, "rb") as f:
+                boxes_bytes = f.read()
 
+        # =========================
+        # CSV EXPORT
+        # =========================
+        csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
+
+        # =========================
+        # PLOT ECG
+        # =========================
+        fig = plot_ecg(
+            df=df,
+            columns=lead_order,
+            title="Digitized ECG - " + uploaded_file.name,
+            n_rows=3,
+            n_columns=4,
+            fs=sample_frequency
+        )
+
+        st.pyplot(fig)
+
+        # =========================
+        # CREATE ZIP (MODEL-AWARE)
+        # =========================
+        if model_choice == "YOLO":
             zip_file = create_zip(
                 csv_bytes=csv_bytes,
                 overlay_img=overlay_bytes,
-                yolo_img=preview_bytes, 
+                boxes_img=preview_bytes,
                 csv_name=csv_name
             )
 
-            st.download_button(
-                label="Download (CSV + images)",
-                data=zip_file,
-                file_name="ecg_results.zip",
-                mime="application/zip"
+        else:
+            zip_file = create_zip(
+                csv_bytes=csv_bytes,
+                overlay_img=overlay_bytes,
+                boxes_img=boxes_bytes,
+                csv_name=csv_name
             )
+
+        # =========================
+        # DOWNLOAD
+        # =========================
+        st.download_button(
+            label="Download (CSV + images)",
+            data=zip_file,
+            file_name="ecg_results.zip",
+            mime="application/zip"
+        )

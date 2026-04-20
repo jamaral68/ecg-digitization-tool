@@ -10,22 +10,22 @@ CLASS_NAMES = {
     0: 'background',
     1: 'pulse',
     2: 'I',
-    3: 'II',
-    4: 'III',
-    5: 'aVR',
-    6: 'aVL',
-    7: 'aVF',
-    8: 'V1',
-    9: 'V2',
-    10: 'V3',
-    11: 'V4',
-    12: 'V5',
+    3: 'aVR',
+    4: 'V1',
+    5: 'V4',
+    6: 'II',
+    7: 'aVL',
+    8: 'V2',
+    9: 'V5',
+    10: 'III',
+    11: 'aVF',
+    12: 'V3',
     13: 'V6',
 } 
  
 def ecg_to_csv_yolo(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     """
-    Extract ECG signals from an image and return a DataFrame.
+    Extract ECG signals from an image and return a DataFrame. 
     """
 
     img = cv.imread(setup.image)
@@ -117,11 +117,10 @@ def ecg_to_csv_yolo(setup, model: YOLO, label_model: YOLO = None, save_overlay=T
 
 
 def ecg_to_csv_cnn(setup, model_leads, device, label_model=None, save_overlay=True):
-
+    """
+    Extract ECG signals from an image and return a DataFrame.
+    """
     img = cv.imread(setup.image)
-
-    if img is None:
-        raise ValueError(f"Não foi possível carregar a imagem: {setup.image}")
 
     # =========================
     # ORIGINAL IMAGE
@@ -250,8 +249,20 @@ def ecg_to_csv_cnn(setup, model_leads, device, label_model=None, save_overlay=Tr
     # =========================
     if save_overlay:
 
+        def draw_label(img, text, x, y, color=(0, 255, 0)):
+            font = cv.FONT_HERSHEY_SIMPLEX
+            scale = 0.5
+            thickness = 1
+
+            (w, h), _ = cv.getTextSize(text, font, scale, thickness)
+
+            y = max(20, y)
+
+            cv.rectangle(img, (x, y - h - 5), (x + w, y), (0, 0, 0), -1)
+            cv.putText(img, text, (x, y - 2), font, scale, color, thickness, cv.LINE_AA)
+
         # -------------------------------------------------
-        # 1. BOXES ONLY IMAGE
+        # 1. BOXES ONLY (COM NOME)
         # -------------------------------------------------
         boxes_only = img.copy()
 
@@ -267,15 +278,7 @@ def ecg_to_csv_cnn(setup, model_leads, device, label_model=None, save_overlay=Tr
             name = CLASS_NAMES.get(int(label), str(label))
 
             cv.rectangle(boxes_only, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv.putText(
-                boxes_only,
-                name,
-                (x1, y1 - 5),
-                cv.FONT_HERSHEY_SIMPLEX,
-                0.5,
-                (0, 255, 0),
-                1
-            )
+            draw_label(boxes_only, name, x1, y1)
 
         for (lx1, ly1, lx2, ly2) in label_boxes:
             cv.rectangle(boxes_only, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
@@ -284,11 +287,10 @@ def ecg_to_csv_cnn(setup, model_leads, device, label_model=None, save_overlay=Tr
         cv.imwrite(boxes_path, boxes_only)
 
         # -------------------------------------------------
-        # 2. FULL OVERLAY (with waveform)
+        # 2. OVERLAY (SEM NOME)
         # -------------------------------------------------
         overlay_img = img.copy()
 
-        # draw boxes
         for box, label, score in zip(
             result_leads['boxes'],
             result_leads['labels'],
@@ -298,16 +300,13 @@ def ecg_to_csv_cnn(setup, model_leads, device, label_model=None, save_overlay=Tr
                 continue
 
             x1, y1, x2, y2 = map(int, box.tolist())
-            name = CLASS_NAMES.get(int(label), str(label))
-
             cv.rectangle(overlay_img, (x1, y1), (x2, y2), (0, 255, 0), 2)
 
         for (lx1, ly1, lx2, ly2) in label_boxes:
             cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
 
-        # draw waveform
+        # waveform
         for curve in line_list:
-
             x = curve['xseg']
             y = curve['yseg']
 
