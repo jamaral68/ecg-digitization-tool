@@ -3,11 +3,19 @@ import tempfile
 import cv2 as cv
 from ultralytics import YOLO
 from setup import Setup
-from edt import ecg_to_csv_yolo
+from edt import *
 from edt_utils import plot_ecg, create_zip
 
+# Título
 st.title("ECG DIGITIZATION TOOL", anchor=False)
 
+# 🔹 Novo: seletor de modelo
+model_choice = st.selectbox(
+    "Escolha o modelo de detecção",
+    ["YOLO", "Faster R-CNN"]
+)
+
+# Inputs
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -31,9 +39,16 @@ lead_order = [
     'III', 'aVF', 'V3', 'V6',
 ]
 
-model = YOLO("best.pt")
-label_model = YOLO("labels.pt")
+# 🔹 Escolha do modelo (por enquanto ambos usam YOLO)
+if model_choice == "YOLO":
+    model = YOLO("best.pt")
+    label_model = YOLO("labels.pt")
+else:
+    # Placeholder para futura implementação do Faster R-CNN
+    model = YOLO("best.pt")
+    label_model = YOLO("labels.pt")
 
+# Upload de imagem
 uploaded_file = st.file_uploader(
     "Upload file",
     type=["jpg", "jpeg", "png"]
