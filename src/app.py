@@ -1,21 +1,20 @@
 import streamlit as st
 import tempfile
 import cv2 as cv
+import torch
 from ultralytics import YOLO
 from setup import Setup
-from edt import *
-from edt_utils import plot_ecg, create_zip
+from edt import ecg_to_csv_yolo, ecg_to_csv_cnn
+from edt_utils import plot_ecg, create_zip, get_model, predict_and_draw
 
-# Título
+
 st.title("ECG DIGITIZATION TOOL", anchor=False)
 
-# 🔹 Novo: seletor de modelo
 model_choice = st.selectbox(
-    "Escolha o modelo de detecção",
+    "Select detection model",
     ["YOLO", "Faster R-CNN"]
 )
 
-# Inputs
 col1, col2, col3, col4 = st.columns(4)
 
 with col1:
@@ -39,16 +38,29 @@ lead_order = [
     'III', 'aVF', 'V3', 'V6',
 ]
 
-# 🔹 Escolha do modelo (por enquanto ambos usam YOLO)
+# =========================
+# LOAD MODELS
+# =========================
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 if model_choice == "YOLO":
     model = YOLO("best.pt")
     label_model = YOLO("labels.pt")
-else:
-    # Placeholder para futura implementação do Faster R-CNN
-    model = YOLO("best.pt")
-    label_model = YOLO("labels.pt")
 
-# Upload de imagem
+else:
+    # Faster R-CNN (leads)
+    model = get_model(14)
+    model.load_state_dict(torch.load("CNN-leads.pth", map_location=device))
+    model.to(device)
+
+    # Faster R-CNN (labels)
+    label_model = get_model(2)
+    label_model.load_state_dict(torch.load("CNN-labels.pth", map_location=device))
+    label_model.to(device)
+
+# =========================
+# FILE UPLOAD
+# =========================
 uploaded_file = st.file_uploader(
     "Upload file",
     type=["jpg", "jpeg", "png"]
@@ -73,8 +85,50 @@ if uploaded_file is not None:
             num_sampling_points=num_sampling_points,
         )
 
-        df = ecg_to_csv_yolo(setup, model, label_model=label_model, save_overlay=True)
+        # =========================
+        # PIPELINE SWITCH
+        # =========================
+        if model_choice == "YOLO":
 
+            df = ecg_to_csv_yolo(
+                setup,
+                model,
+                label_model=label_model,
+                save_overlay=True
+            )
+
+            # YOLO preview
+            results = model(file_path)[0]
+            yolo_img = results.plot()
+
+            _, buffer = cv.imencode(".png", yolo_img)
+            preview_bytes = buffer.tobytes()
+
+        else:
+
+            df = ecg_to_csv_cnn(
+                setup,
+                model_leads=model,
+                device=device,
+                label_model=label_model,
+                save_overlay=True
+            )
+
+            img = cv.imread(file_path)
+
+            preview = predict_and_draw(
+                model,
+                img,
+                device,
+                threshold=0.5
+            )
+
+            _, buffer = cv.imencode(".png", preview)
+            preview_bytes = buffer.tobytes()
+
+        # =========================
+        # OUTPUT
+        # =========================
         if df is not None:
             st.success("Processing completed!")
 
@@ -94,17 +148,12 @@ if uploaded_file is not None:
             with open(overlay_path, "rb") as f:
                 overlay_bytes = f.read()
 
-            results = model(file_path)[0]
-            yolo_img = results.plot()
-            _, yolo_buffer = cv.imencode(".png", yolo_img)
-            yolo_bytes = yolo_buffer.tobytes()
-
             csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
 
             zip_file = create_zip(
                 csv_bytes=csv_bytes,
                 overlay_img=overlay_bytes,
-                yolo_img=yolo_bytes,
+                yolo_img=preview_bytes, 
                 csv_name=csv_name
             )
 
