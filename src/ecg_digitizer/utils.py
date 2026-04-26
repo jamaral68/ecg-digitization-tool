@@ -9,6 +9,53 @@ from scipy import interpolate
 from scipy.signal import medfilt
 
 
+def extract_curve_robust(
+    img_lead: np.ndarray,
+    dilate_iters: int = 1,
+    medfilt_kernel: int = 11,
+    mad_factor: float = 5.0,
+) -> np.ndarray:
+    """Extrai a curva (yseg) de um crop binário descartando ruído.
+
+    Pipeline:
+      1. Filtra o ruído estrutural mantendo apenas o **maior componente
+         conexo** escuro (descarta resíduo de grade, manchas, textos pequenos).
+         Aplica dilatação leve antes para reconectar fragmentos do traço.
+      2. Faz `argmin` coluna-a-coluna na imagem filtrada.
+      3. Remove outliers pontuais comparando cada `yseg[x]` com a mediana
+         móvel; substitui valores com desvio > `mad_factor * MAD` por
+         interpolação linear dos vizinhos válidos.
+    """
+    binary = img_lead if img_lead.ndim == 2 else cv.cvtColor(img_lead, cv.COLOR_BGR2GRAY)
+    inv = cv.bitwise_not(binary)
+    if dilate_iters > 0:
+        kernel = cv.getStructuringElement(cv.MORPH_RECT, (3, 3))
+        inv = cv.dilate(inv, kernel, iterations=dilate_iters)
+
+    n_labels, labels, stats, _ = cv.connectedComponentsWithStats(inv, connectivity=8)
+    if n_labels > 1:
+        largest = 1 + int(np.argmax(stats[1:, cv.CC_STAT_AREA]))
+        signal_only = np.where(labels == largest, 0, 255).astype(np.uint8)
+    else:
+        signal_only = binary
+
+    yseg = np.argmin(signal_only, axis=0)
+
+    kernel_size = max(3, medfilt_kernel | 1)  # garante ímpar e >= 3
+    yseg_smooth = medfilt(yseg, kernel_size=kernel_size)
+    residual = np.abs(yseg.astype(float) - yseg_smooth.astype(float))
+    mad = np.median(residual)
+    if mad > 0:
+        outliers = residual > mad_factor * mad
+        if outliers.any() and (~outliers).any():
+            valid_idx = np.flatnonzero(~outliers)
+            outlier_idx = np.flatnonzero(outliers)
+            yseg = yseg.copy()
+            yseg[outlier_idx] = np.interp(outlier_idx, valid_idx, yseg[valid_idx])
+
+    return yseg.astype(int)
+
+
 def remove_labels_inpaint(
     img_gray: np.ndarray, label_boxes: list, x1_lead: int, y1_lead: int
 ) -> np.ndarray:
@@ -59,30 +106,33 @@ def interpolate_segment(x, y, num):
     return x_new, y_new
 
 
-def segment_to_df(line_list, pulse_per_sec, pulse_per_mv, num_pts):
+def segment_to_df(ecg_curves, pulse_per_sec, pulse_per_mv, num_pts):
     """
     Convert a list of ECG waveform segments into a pandas DataFrame.
     Each column represents one lead's interpolated ECG signal.
     """
-    df = pd.DataFrame()
-    for i, line in enumerate(line_list):
-        for seg in line["curves"]:
-            xsec, ymv = convert_to_secmv(
-                seg["xseg"], seg["yseg"], line["wpulse"], pulse_per_sec, pulse_per_mv
-            )
-            _, y_new = interpolate_segment(xsec, ymv, num_pts)
-            col_name = seg["name"]
-            if col_name in df.columns:
-                col_name = f"{col_name}_{i}"
-            df[col_name] = y_new
-    return df
+    dfs = []
+    for lead_name, curve in ecg_curves.items():
+        xsec, ymv = convert_to_secmv(
+            curve["xseg"], curve["yseg"], curve["wpulse"], pulse_per_sec, pulse_per_mv
+        )
+        x_new, y_new = interpolate_segment(xsec, ymv, num_pts)
+        print(len(xsec), len(y_new))
+        dfs.append(pd.Series(y_new, name=lead_name, index=x_new))
+    return pd.concat(dfs,axis=1)
 
 
-def draw_overlay(image_path, result, model):
+def draw_overlay(image_path, result, model, label_boxes=None):
     """
     Draw ECG waveforms on top of the original image for visual validation.
+
+    Replica o pipeline de `ecg_to_csv`: encolhe o crop em 10 px em X, aplica
+    inpainting dos labels detectados (se houver) e extrai a curva via argmin
+    na grayscale tratada — assim a sobreposição reflete o sinal realmente
+    digitalizado, não uma versão crua do bbox.
     """
     img = cv.imread(image_path)
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     overlay = img.copy()
 
     for box in result.boxes:
@@ -93,7 +143,20 @@ def draw_overlay(image_path, result, model):
         if lead_name.lower() == "pulse":
             continue
 
-        crop = cv.cvtColor(img[y1:y2, x1:x2], cv.COLOR_BGR2GRAY)
+        crop_x1 = max(0, x1 + 10)
+        crop_x2 = min(img_gray.shape[1], x2 - 10)
+
+        if label_boxes:
+            full_crop = remove_labels_inpaint(
+                img_gray, label_boxes, x1_lead=crop_x1, y1_lead=y1
+            )
+            crop = full_crop[: (y2 - y1), : (crop_x2 - crop_x1)]
+        else:
+            crop = img_gray[y1:y2, crop_x1:crop_x2]
+
+        if crop.shape[0] < 2 or crop.shape[1] < 2:
+            continue
+
         yseg = np.argmin(crop, axis=0)
         xseg = np.arange(len(yseg))
 
@@ -102,13 +165,71 @@ def draw_overlay(image_path, result, model):
 
         cv.rectangle(overlay, (x1, y1), (x2, y2), (0, 255, 0), 2)
         for k in range(len(xseg) - 1):
-            pt1 = (x1 + int(xseg[k]), y1 + int(yseg[k]))
-            pt2 = (x1 + int(xseg[k + 1]), y1 + int(yseg[k + 1]))
+            pt1 = (crop_x1 + int(xseg[k]), y1 + int(yseg[k]))
+            pt2 = (crop_x1 + int(xseg[k + 1]), y1 + int(yseg[k + 1]))
             cv.line(overlay, pt1, pt2, color, 2)
 
     alpha = 0.7
     final = cv.addWeighted(overlay, alpha, img, 1 - alpha, 0)
     return final
+
+
+def draw_overlay_from_curves(curves_df, line_color=(0, 0, 255), thickness=2):
+    """
+    Desenha cada curva digitalizada sobre o seu próprio recorte (imagem do lead
+    já endireitada pelo `ECGScanner`).
+
+    Como `ecg_to_csv` agora extrai `(xseg, yseg)` no espaço do crop warped — e
+    não da imagem original — não dá para desenhar diretamente sobre a foto
+    crua sem aplicar a inversa da perspectiva. Esta função plota a curva em
+    cima de cada recorte e devolve um dict `{lead_name: overlay_bgr}`.
+
+    Espera-se que `curves_df` tenha uma linha por lead, com as colunas:
+      - name (str): nome do lead.
+      - xseg, yseg (array-like): curva em pixels relativos ao crop.
+      - rec (np.ndarray): imagem do crop (saída de `scan_yolo`).
+    """
+    overlays = {}
+    for _, row in curves_df.iterrows():
+        rec = row["rec"]
+        if rec is None:
+            continue
+        canvas = rec if rec.ndim == 3 else cv.cvtColor(rec, cv.COLOR_GRAY2BGR)
+        canvas = canvas.copy()
+
+        xseg = np.asarray(row["xseg"])
+        yseg = np.asarray(row["yseg"])
+        if len(xseg) < 2 or len(yseg) < 2:
+            overlays[row["name"]] = canvas
+            continue
+
+        for k in range(len(xseg) - 1):
+            pt1 = (int(xseg[k]), int(yseg[k]))
+            pt2 = (int(xseg[k + 1]), int(yseg[k + 1]))
+            cv.line(canvas, pt1, pt2, line_color, thickness)
+
+        overlays[row["name"]] = canvas
+    return overlays
+
+
+def line_list_to_curves_df(line_list):
+    """Converte o `line_list` de `ecg_to_csv` em DataFrame para `draw_overlay_from_curves`.
+
+    Lê os campos efetivamente populados pelo `ecg_to_csv` atual:
+    `name`, `xseg`, `yseg` e `rec` (recorte warped do lead).
+    """
+    rows = []
+    for line in line_list:
+        for seg in line["curves"]:
+            rows.append(
+                {
+                    "name": seg["name"],
+                    "xseg": seg["xseg"],
+                    "yseg": seg["yseg"],
+                    "rec": seg.get("rec"),
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def plot_ecg_signal(time, signal, ax):

@@ -3,6 +3,8 @@ import tempfile
 from pathlib import Path
 
 import cv2 as cv
+import matplotlib.pyplot as plt
+import numpy as np
 import streamlit as st
 from ultralytics import YOLO
 
@@ -11,7 +13,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from ecg_digitizer.config import DigitizerConfig  # noqa: E402
 from ecg_digitizer.digitizer import ecg_to_csv  # noqa: E402
-from ecg_digitizer.utils import create_zip, plot_ecg  # noqa: E402
+from ecg_digitizer.utils import plot_ecg_signal  # noqa: E402
 
 MODELS_DIR = PROJECT_ROOT / "models"
 
@@ -79,40 +81,38 @@ if uploaded_file is not None:
 
         df = ecg_to_csv(config, model, label_model=label_model, save_overlay=True)
 
-        if df is not None:
+        if df is not None and not df.empty:
             st.success("Processing completed!")
 
-            fig = plot_ecg(
-                df=df,
-                columns=lead_order,
-                title="Digitized ECG - " + uploaded_file.name,
-                n_rows=3,
-                n_columns=4,
-                fs=sample_frequency,
-            )
+            # Casa o lead_order (uppercase) com as colunas reais do df
+            # (digitizer.py emite lead_name.lower()).
+            available = {col.lower(): col for col in df.columns}
+            ordered_cols = [available[lead.lower()] for lead in lead_order if lead.lower() in available]
+
+            n_cols = 4
+            n_rows = (len(ordered_cols) + n_cols - 1) // n_cols
+            fig, axes = plt.subplots(n_rows, n_cols, figsize=(20, 3 * n_rows))
+            fig.suptitle("Digitized ECG - " + uploaded_file.name, fontsize=18)
+            axes = np.atleast_2d(axes).flatten()
+
+            for idx, col in enumerate(ordered_cols):
+                series = df[col].dropna()
+                ts = np.asarray(series.index, dtype=float)
+                plot_ecg_signal(ts, series.values, axes[idx])
+                axes[idx].set_title(col.upper(), fontsize=11)
+
+            for idx in range(len(ordered_cols), len(axes)):
+                axes[idx].set_visible(False)
+
+            plt.subplots_adjust(top=0.92, hspace=0.5, wspace=0.4)
             st.pyplot(fig)
 
-            overlay_path = config.csv_name.replace(".csv", "_overlay.png")
-            with open(overlay_path, "rb") as f:
-                overlay_bytes = f.read()
-
-            results = model(file_path)[0]
-            yolo_img = results.plot()
-            _, yolo_buffer = cv.imencode(".png", yolo_img)
-            yolo_bytes = yolo_buffer.tobytes()
-
-            csv_bytes = df.to_csv(index=False).encode("utf-8-sig")
-
-            zip_file = create_zip(
-                csv_bytes=csv_bytes,
-                overlay_img=overlay_bytes,
-                yolo_img=yolo_bytes,
-                csv_name=csv_name,
-            )
-
+            csv_bytes = df.to_csv(index=True).encode("utf-8-sig")
             st.download_button(
-                label="Download (CSV + images)",
-                data=zip_file,
-                file_name="ecg_results.zip",
-                mime="application/zip",
+                label="Download CSV",
+                data=csv_bytes,
+                file_name=csv_name,
+                mime="text/csv",
             )
+        else:
+            st.error("No leads were digitized.")

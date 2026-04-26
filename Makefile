@@ -9,7 +9,15 @@ IMAGE      ?= $(REPO_NAME):$(TAG)
 PORT       ?= 8888
 STREAMLIT_PORT ?= 8501
 
-.PHONY: help build run shell push deploy register deploy-full clean install-poetry app demo
+PYTHON := python3
+VENV_PATH := $(shell poetry env info --path 2>/dev/null)
+PIP := $(VENV_PATH)/bin/pip
+ 
+# Torch ROCm config
+TORCH_VERSION := 2.11.0+rocm7.2
+TORCH_INDEX := https://download.pytorch.org/whl/rocm7.2
+ 
+.PHONY: help build run shell push deploy register deploy-full clean install-poetry app demo install install-torch install-amd-torch test-gpu help clean
 
 help:
 	@echo "Targets disponiveis:"
@@ -93,3 +101,39 @@ install-poetry:
 	@echo ""
 	@echo ">> Para usar 'poetry' no terminal, adicione ao seu ~/.bashrc:"
 	@echo '     export PATH="$$HOME/.local/bin:$$PATH"'
+
+
+
+install:
+	@echo ">>> Instalando dependências do projeto via Poetry..."
+	poetry install
+	@echo ">>> Pronto! Use 'make install-amd-torch' para instalar o PyTorch com ROCm."
+ 
+install-amd-torch:
+	@echo ">>> Instalando PyTorch $(TORCH_VERSION) com suporte ROCm..."
+	@if [ -z "$(VENV_PATH)" ]; then \
+		echo "ERRO: Nenhum ambiente virtual Poetry encontrado. Rode 'make install' primeiro."; \
+		exit 1; \
+	fi
+	$(PIP) install torch==$(TORCH_VERSION) torchvision \
+		--index-url $(TORCH_INDEX)
+	@echo ">>> PyTorch com ROCm instalado com sucesso!"
+ 
+setup: install install-amd-torch
+	@echo ""
+	@echo ">>> Setup completo! Rode 'make test-gpu' para verificar a GPU."
+ 
+test-gpu:
+	@echo ">>> Testando reconhecimento da GPU AMD..."
+	@if [ -z "$(VENV_PATH)" ]; then \
+		echo "ERRO: Nenhum ambiente virtual Poetry encontrado."; \
+		exit 1; \
+	fi
+	$(VENV_PATH)/bin/python -c "\
+import torch; \
+print('ROCm disponivel:', torch.cuda.is_available()); \
+print('Num GPUs:', torch.cuda.device_count()); \
+print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'Nenhuma'); \
+print('Versao HIP:', torch.version.hip); \
+"
+ 

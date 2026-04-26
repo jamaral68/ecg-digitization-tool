@@ -8,18 +8,11 @@
 # Scanned images will be output to directory named 'output'
 from pathlib import Path
 
-# from pyimagesearch import transform
-# from pyimagesearch import imutils
 from scipy.spatial import distance as dist
-from matplotlib.patches import Polygon
 
 # import polygon_interacter as poly_i
 import numpy as np
-import matplotlib.pyplot as plt
-import itertools
-import math
 import cv2
-from pylsd.lsd import lsd
 from matplotlib.lines import Line2D
 from matplotlib.artist import Artist
 import argparse
@@ -50,11 +43,10 @@ class ECGScannerConfig:
     hsv_saturation_multiplier: float = 1.5
     hsv_brightness_multiplier: float = 1.2
 
-
 class ECGScanner(object):
     """An ECG Image Scanner"""
 
-    def __init__(self, config: ECGScannerConfig):
+    def __init__(self,v_margin=60, s_margin=90, fill_value=255, dark_percentile=10, s_quantile_offset=0.4):
         """
         Args:
             interactive (boolean): If True, user can adjust screen contour before
@@ -65,176 +57,12 @@ class ECGScanner(object):
             MAX_QUAD_ANGLE_RANGE (int):  A contour will also be rejected if the range
                 of its interior angles exceeds MAX_QUAD_ANGLE_RANGE. Defaults to 40.
         """
-        self.config = config
-        self.output_dir = config.output_dir or Path.cwd() / "scanned_ecgs"
-        self.stages = {}
-        self.output_dir.mkdir(parents=True, exist_ok=True)
-
-    def filter_corners(
-        self,
-        corners,
-    ):
-        """Filters corners that are within min_dist of others"""
-
-        def predicate(representatives, corner):
-            return all(
-                dist.euclidean(representative, corner) >= self.config.min_dist
-                for representative in representatives
-            )
-
-        filtered_corners = []
-        for c in corners:
-            if predicate(filtered_corners, c):
-                filtered_corners.append(c)
-        return filtered_corners
-
-    def angle_between_vectors_degrees(self, u: np.ndarray, v: np.ndarray) -> float:
-        """Returns the angle between two vectors in degrees"""
-        return np.degrees(
-            math.acos(np.dot(u, v) / (np.linalg.norm(u) * np.linalg.norm(v)))
-        )
-
-    def get_angle(
-        self, p1: tuple[float, float], p2: tuple[float, float], p3: tuple[float, float]
-    ) -> float:
-        """
-        Returns the angle between the line segment from p2 to p1
-        and the line segment from p2 to p3 in degrees
-        """
-        a = np.radians(np.array(p1))
-        b = np.radians(np.array(p2))
-        c = np.radians(np.array(p3))
-
-        avec = a - b
-        cvec = c - b
-
-        return self.angle_between_vectors_degrees(avec, cvec)
-
-    def angle_range(self, quad: np.ndarray) -> float:
-        """
-        Returns the range between max and min interior angles of quadrilateral.
-        The input quadrilateral must be a numpy array with vertices ordered clockwise
-        starting with the top left vertex.
-        """
-        tl, tr, br, bl = quad
-        ura = self.get_angle(tl[0], tr[0], br[0])
-        ula = self.get_angle(bl[0], tl[0], tr[0])
-        lra = self.get_angle(tr[0], br[0], bl[0])
-        lla = self.get_angle(br[0], bl[0], tl[0])
-
-        angles = [ura, ula, lra, lla]
-        return np.ptp(angles)
-
-    def get_corners(self, img):
-        """
-        Returns a list of corners ((x, y) tuples) found in the input image. With proper
-        pre-processing and filtering, it should output at most 10 potential corners.
-        This is a utility function used by get_contours. The input image is expected
-        to be rescaled and Canny filtered prior to be passed in.
-        """
-        lines = lsd(img)
-
-        # massages the output from LSD
-        # LSD operates on edges. One "line" has 2 edges, and so we need to combine the edges back into lines
-        # 1. separate out the lines into horizontal and vertical lines.
-        # 2. Draw the horizontal lines back onto a canvas, but slightly thicker and longer.
-        # 3. Run connected-components on the new canvas
-        # 4. Get the bounding box for each component, and the bounding box is final line.
-        # 5. The ends of each line is a corner
-        # 6. Repeat for vertical lines
-        # 7. Draw all the final lines onto another canvas. Where the lines overlap are also corners
-
-        corners = []
-        if lines is not None:
-            # separate out the horizontal and vertical lines, and draw them back onto separate canvases
-            lines = lines.squeeze().astype(np.int32).tolist()
-            horizontal_lines_canvas = np.zeros(img.shape, dtype=np.uint8)
-            vertical_lines_canvas = np.zeros(img.shape, dtype=np.uint8)
-            for line in lines:
-                x1, y1, x2, y2, _ = line
-                if abs(x2 - x1) > abs(y2 - y1):
-                    (x1, y1), (x2, y2) = sorted(
-                        ((x1, y1), (x2, y2)), key=lambda pt: pt[0]
-                    )
-                    cv2.line(
-                        horizontal_lines_canvas,
-                        (max(x1 - 5, 0), y1),
-                        (min(x2 + 5, img.shape[1] - 1), y2),
-                        255,
-                        2,
-                    )
-                else:
-                    (x1, y1), (x2, y2) = sorted(
-                        ((x1, y1), (x2, y2)), key=lambda pt: pt[1]
-                    )
-                    cv2.line(
-                        vertical_lines_canvas,
-                        (x1, max(y1 - 5, 0)),
-                        (x2, min(y2 + 5, img.shape[0] - 1)),
-                        255,
-                        2,
-                    )
-
-            lines = []
-
-            # find the horizontal lines (connected-components -> bounding boxes -> final lines)
-            (contours, hierarchy) = cv2.findContours(
-                horizontal_lines_canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
-            )
-            contours = sorted(
-                contours, key=lambda c: cv2.arcLength(c, True), reverse=True
-            )[:2]
-            horizontal_lines_canvas = np.zeros(img.shape, dtype=np.uint8)
-            for contour in contours:
-                contour = contour.reshape((contour.shape[0], contour.shape[2]))
-                min_x = np.amin(contour[:, 0], axis=0) + 2
-                max_x = np.amax(contour[:, 0], axis=0) - 2
-                left_y = int(np.average(contour[contour[:, 0] == min_x][:, 1]))
-                right_y = int(np.average(contour[contour[:, 0] == max_x][:, 1]))
-                lines.append((min_x, left_y, max_x, right_y))
-                cv2.line(
-                    horizontal_lines_canvas, (min_x, left_y), (max_x, right_y), 1, 1
-                )
-                corners.append((min_x, left_y))
-                corners.append((max_x, right_y))
-
-            # find the vertical lines (connected-components -> bounding boxes -> final lines)
-            (contours, hierarchy) = cv2.findContours(
-                vertical_lines_canvas, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
-            )
-            contours = sorted(
-                contours, key=lambda c: cv2.arcLength(c, True), reverse=True
-            )[:2]
-            vertical_lines_canvas = np.zeros(img.shape, dtype=np.uint8)
-            for contour in contours:
-                contour = contour.reshape((contour.shape[0], contour.shape[2]))
-                min_y = np.amin(contour[:, 1], axis=0) + 2
-                max_y = np.amax(contour[:, 1], axis=0) - 2
-                top_x = int(np.average(contour[contour[:, 1] == min_y][:, 0]))
-                bottom_x = int(np.average(contour[contour[:, 1] == max_y][:, 0]))
-                lines.append((top_x, min_y, bottom_x, max_y))
-                cv2.line(vertical_lines_canvas, (top_x, min_y), (bottom_x, max_y), 1, 1)
-                corners.append((top_x, min_y))
-                corners.append((bottom_x, max_y))
-
-            # find the corners
-            corners_y, corners_x = np.where(
-                horizontal_lines_canvas + vertical_lines_canvas == 2
-            )
-            corners += zip(corners_x, corners_y)
-
-        # remove corners in close proximity
-        corners = self.filter_corners(corners)
-        return corners
-
-    def is_valid_contour(self, cnt, image_width, image_height):
-        """Returns True if the contour satisfies all requirements set at instantitation"""
-        return (
-            len(cnt) == 4
-            and cv2.contourArea(cnt)
-            > image_width * image_height * self.config.min_quad_area_ratio
-            and self.angle_range(cnt) < self.config.max_quad_angle_range
-        )
+        
+        self.v_margin = v_margin
+        self.s_margin = s_margin
+        self.fill_value = fill_value
+        self.dark_percentile = dark_percentile
+        self.s_quantile_offset = s_quantile_offset
 
     @staticmethod
     def order_points(pts):
@@ -305,268 +133,98 @@ class ECGScanner(object):
 
         # return the warped image
         return warped
+    
+    @staticmethod
+    def detect_signal_profile(img_bgr, dark_percentile=10, s_quantile_offset=0.4):
+        """Detecta o perfil HSV do traçado do ECG.
+
+        O sinal é tipicamente o conjunto de pixels mais escuros (tinta sobre
+        papel) e acromático (preto/cinza/azul-escuro). Estratégia:
+        1. Pega os pixels mais escuros (abaixo do percentil `dark_percentile` de V).
+        2. Calcula estatísticas de S e V desse conjunto → tolerâncias para a máscara.
+        """
+        hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+        v = hsv[..., 2]
+        v_thresh = float(np.percentile(v, dark_percentile))
+        dark = hsv[v <= v_thresh]
+        if dark.size == 0:
+            return None
+        return {
+            "v_thresh": v_thresh,
+            "s_median": float(np.median(dark[:, 1])),
+            "v_median": float(np.median(dark[:, 2])),
+            "s_max": float(np.quantile(dark[:, 1], 0.5 + s_quantile_offset)),
+        }
+
+    def keep_signal_color(self, img_bgr, ):
+        """Mantém apenas pixels com perfil do traçado; o resto vira branco.
+
+        Define a cor do sinal como (V baixo, S baixo) e aceita pixels com
+        V <= v_thresh + v_margin e S <= s_max + s_margin. Tudo fora dessa
+        faixa (grade colorida, fundo branco, texto colorido) é substituído.
+        """
+        if img_bgr.ndim == 2:
+            return img_bgr.copy(), None, None
+
+        profile = self.detect_signal_profile(img_bgr, dark_percentile=self.dark_percentile, s_quantile_offset=self.s_quantile_offset)
+        if profile is None:
+            return img_bgr.copy(), None, None
+
+        hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
+        s_upper = min(255, int(profile["s_max"] + self.s_margin))
+        v_upper = min(255, int(profile["v_thresh"] + self.v_margin))
+        signal_mask = cv2.inRange(hsv, (0, 0, 0), (180, s_upper, v_upper))
+
+        cleaned = np.full_like(img_bgr, self.fill_value)
+        cleaned[signal_mask > 0] = img_bgr[signal_mask > 0]
+        return cleaned
+
 
     @staticmethod
-    def resize(image, width=None, height=None, inter=cv2.INTER_AREA):
-        # initialize the dimensions of the image to be resized and
-        # grab the image size
-        dim = None
-        (h, w) = image.shape[:2]
-
-        # if both the width and height are None, then return the
-        # original image
-        if width is None and height is None:
-            return image
-
-        # check to see if the width is None
-        if width is None:
-            # calculate the ratio of the height and construct the
-            # dimensions
-            r = height / float(h)
-            dim = (int(w * r), height)
-
-        # otherwise, the height is None
-        else:
-            # calculate the ratio of the width and construct the
-            # dimensions
-            r = width / float(w)
-            dim = (width, int(h * r))
-
-        # resize the image
-        resized = cv2.resize(image, dim, interpolation=inter)
-
-        # return the resized image
-        return resized
-
-    def set_stages(
-        self,
-        name: str,
+    def _inpaint_labels(
         image: np.ndarray,
-        points: np.ndarray | None = None,
-        draw_contour: bool = False,
-    ) -> None:
-        if not self.config.debug_mode:
-            return
-        self.stages[name] = (image, points, draw_contour)
+        label_boxes: list[tuple[int, int, int, int]],
+        dilate_px: int = 3,
+        inpaint_radius: int = 3,
+    ) -> np.ndarray:
+        """Aplica cv2.inpaint sobre as regiões de texto detectadas pelo YOLO de labels."""
+        h, w = image.shape[:2]
+        mask = np.zeros((h, w), dtype=np.uint8)
+        for lx1, ly1, lx2, ly2 in label_boxes:
+            x1 = max(0, lx1 - dilate_px)
+            y1 = max(0, ly1 - dilate_px)
+            x2 = min(w, lx2 + dilate_px)
+            y2 = min(h, ly2 + dilate_px)
+            mask[y1:y2, x1:x2] = 255
+        return cv2.inpaint(image, mask, inpaint_radius, cv2.INPAINT_TELEA)
 
-    def get_stages(self) -> dict[str, tuple[np.ndarray, np.ndarray | None, bool]]:
-        stages_result = []
-        for k, v in self.stages.items():
-            if isinstance(v, tuple):
-                stages_result.append((k, v[0], v[1], v[2]))
-            else:
-                stages_result.append((k, v))
-        return stages_result
+    def scan_yolo(
+        self,
+        image: np.ndarray,
+        lead_boxes: dict[str, tuple[int, int, int, int]],
+        label_boxes: list[tuple[int, int, int, int]] | None = None,
+    ) -> dict[str, np.ndarray]:
+        orig = self.keep_signal_color(image.copy())
+        if label_boxes:
+            orig = self._inpaint_labels(orig, label_boxes)
+        image_boxes: dict[str, np.ndarray] = dict()
+        for lead_name, screenCnt in lead_boxes.items():
+            # apply the perspective transformation
+            warped = self.four_point_transform(orig, screenCnt)
+            # convert the warped image to grayscale
+            gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
+            # sharpen image
 
-    def auto_canny(self, gray: np.ndarray) -> np.ndarray:
-        v = np.quantile(gray, 0.5)
-        lower = int(max(0, (1.0 - self.config.canny_sigma) * v))
-        upper = int(min(255, (1.0 + self.config.canny_sigma) * v))
-        return cv2.Canny(gray, lower, upper, apertureSize=3, L2gradient=True)
+            sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
+            sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
 
-    def dilate_image(self, gray: np.ndarray) -> dict[str, np.ndarray]:
-        # Highlight dark ECG trace on bright paper
-        kernel_bh = cv2.getStructuringElement(
-            cv2.MORPH_RECT,
-            (self.config.morph_kernel_size, self.config.morph_kernel_size),
-        )
-        blackhat = cv2.morphologyEx(gray, cv2.MORPH_GRADIENT, kernel_bh)
-        self.set_stages("gradient", blackhat)
-
-        # Clean tiny noise
-        kernel_open = cv2.getStructuringElement(cv2.MORPH_DIAMOND, (7, 7))
-        opened = cv2.morphologyEx(blackhat, cv2.MORPH_OPEN, kernel_open)
-        self.set_stages("opened", opened)
-        # Reconnect broken ECG segments
-        kernel_close = cv2.getStructuringElement(cv2.MORPH_DIAMOND, (5, 5))
-        closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel_close)
-        self.set_stages("closed", closed)
-
-        return closed
-
-    def change_image_parameters(self, image: np.ndarray) -> np.ndarray:
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
-
-        # Canais: H (matiz), S (saturação), V (brilho)
-        hsv[:, :, 0] *= (
-            self.config.hsv_hue_multiplier
-        )  # Hue       — multiplicador (cuidado: faixa 0-180 no OpenCV)
-        hsv[:, :, 1] *= (
-            self.config.hsv_saturation_multiplier
-        )  # Saturação — >1 aumenta, <1 diminui
-        hsv[:, :, 2] *= (
-            self.config.hsv_brightness_multiplier
-        )  # Brilho    — >1 mais claro, <1 mais escuro
-
-        hsv = np.clip(hsv, 0, 255).astype(np.uint8)
-        result = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-        return result
-
-    def preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        self.set_stages("original", image)
-        image = self.change_image_parameters(image)
-        self.set_stages("changed", image)
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.bilateralFilter(
-            gray,
-            d=self.config.bilateral_filter_d,
-            sigmaColor=self.config.bilateral_filter_sigma_color,
-            sigmaSpace=self.config.bilateral_filter_sigma_space,
-        )
-        clahe = cv2.createCLAHE(
-            clipLimit=self.config.clahe_clip_limit,
-            tileGridSize=(
-                self.config.clahe_tile_grid_size,
-                self.config.clahe_tile_grid_size,
-            ),
-        )
-        img_clahe = clahe.apply(gray)
-        self.set_stages("clahe", img_clahe)
-        return img_clahe
-
-    def get_contour(self, rescaled_image):
-        """
-        Returns a numpy array of shape (4, 2) containing the vertices of the four corners
-        of the document in the image. It considers the corners returned from get_corners()
-        and uses heuristics to choose the four corners that most likely represent
-        the corners of the document. If no corners were found, or the four corners represent
-        a quadrilateral that is too small or convex, it returns the original four corners.
-        """
-        image_height, image_width, _ = rescaled_image.shape
-        # convert the image to grayscale and blur it slightly
-        gray = self.preprocess_image(rescaled_image)
-        self.set_stages("gray", gray)
-        # dilate helps to remove potential holes between edge segments
-        # gray = self.dilate_image(gray)
-        # find edges and mark them in the output map using the Canny algorithm
-        edged = self.auto_canny(gray)
-        test_corners = self.get_corners(edged)
-        self.set_stages("edged", edged)
-        approx_contours = []
-
-        if len(test_corners) >= 4:
-            quads = []
-
-            for quad in itertools.combinations(test_corners, 4):
-                points = np.array(quad)
-                points = self.order_points(points)
-                points = np.array([[p] for p in points], dtype="int32")
-                quads.append(points)
-
-            # get top five quadrilaterals by area
-            quads = sorted(quads, key=cv2.contourArea, reverse=True)[:5]
-            # sort candidate quadrilaterals by their angle range, which helps remove outliers
-            quads = sorted(quads, key=self.angle_range)
-
-            approx = quads[0]
-            if self.is_valid_contour(approx, image_width, image_height):
-                approx_contours.append(approx)
-
-            self.set_stages(
-                f"approx-{len(approx_contours)}-{len(approx)}",
-                rescaled_image,
-                approx,
-                True,
+            # apply adaptive threshold to get black and white effect
+            image_boxes[lead_name] = cv2.adaptiveThreshold(
+                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
             )
-        # also attempt to find contours directly from the edged image, which occasionally
-        # produces better results
-        (cnts, hierarchy) = cv2.findContours(
-            edged.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-        )
-        cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:5]
-
-        # loop over the contours
-        for c in cnts:
-            # approximate the contour
-            approx = cv2.approxPolyDP(c, 80, True)
-            if self.is_valid_contour(approx, image_width, image_height):
-                approx_contours.append(approx)
-                break
-
-        # If we did not find any valid contours, just use the whole image
-        if not approx_contours:
-            top_right = (image_width, 0)
-            bottom_right = (image_width, image_height)
-            bottom_left = (0, image_height)
-            top_left = (0, 0)
-            screenCnt = np.array(
-                [[top_right], [bottom_right], [bottom_left], [top_left]]
-            )
-
-        else:
-            screenCnt = max(approx_contours, key=cv2.contourArea)
-        screenCnt = screenCnt.reshape(4, 2)  # .reshape(-1, 2)
-
-        return screenCnt
-
-    def interactive_get_contour(self, screenCnt, rescaled_image):
-        poly = Polygon(
-            screenCnt, animated=True, fill=False, color="yellow", linewidth=5
-        )
-        fig, ax = plt.subplots()
-        ax.add_patch(poly)
-        ax.set_title(
-            (
-                "Drag the corners of the box to the corners of the document. \n"
-                "Close the window when finished."
-            )
-        )
-        p = PolygonInteractor(ax, poly)
-        plt.imshow(rescaled_image)
-        plt.show()
-
-        new_points = p.get_poly_points()[:4]
-        new_points = np.array([[p] for p in new_points], dtype="int32")
-        return new_points.reshape(4, 2)
-
-    ## TODO: improve this function
-    def rotate_image(self, image: np.ndarray):
-        if image.shape[0] > image.shape[1]:
-            return cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        return image
-
-    def scan_image_path(self, image_path):
-        # load the image and compute the ratio of the old height
-        # to the new height, clone it, and resize it
-        return self.scan(cv2.imread(image_path))
-
-    def scan_images_and_save(self, image_paths):
-        for image_path in image_paths:
-            img = self.scan_image_path(image_path)
-            cv2.imwrite(self.config.output_dir / image_path.name, img)
-
-    def reset_stages(self):
-        self.stages.clear()
-
-    def scan(self, image: np.ndarray):
-        assert image is not None
-        image = self.rotate_image(image)
-        ratio = image.shape[0] / self.config.rescaled_height
-        orig = image.copy()
-        rescaled_image = self.resize(image, height=int(self.config.rescaled_height))
-
-        # get the contour of the document
-        screenCnt = self.get_contour(rescaled_image)
-
-        if self.config.interactive:
-            screenCnt = self.interactive_get_contour(screenCnt, rescaled_image)
-
-        # apply the perspective transformation
-        warped = self.four_point_transform(orig, screenCnt * ratio)
-
-        # convert the warped image to grayscale
-        gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-        # sharpen image
-
-        sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
-        sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
-
-        # apply adaptive threshold to get black and white effect
-        thresh = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
-        )
-        self.set_stages("thresh", thresh)
-        return thresh
+        return image_boxes
+    
+    
 
 
 class PolygonInteractor(object):

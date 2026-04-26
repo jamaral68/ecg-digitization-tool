@@ -18,12 +18,6 @@ pytesseract = "^0.3.13"
 boto3 = "^1.42.30"
 scikit-image = "^0.26.0"
 ocrd-fork-pylsd = "^0.0.8"
-torch = [
-  {url = "https://download.pytorch.org/whl/rocm6.0/torch-2.3.1%2Brocm6.0-cp312-cp312-linux_x86_64.whl", markers = "sys_platform == 'linux'"}
-]
-torchvision = [
-    {url = "https://download.pytorch.org/whl/rocm6.0/torchvision-0.18.1%2Brocm6.0-cp312-cp312-linux_x86_64.whl", markers = "sys_platform == 'linux'"}
-]
 nbconvert = "^7.17.0"
 botocore = {extras = ["crt"], version = "^1.42.61"}
 python-dotenv = "^1.2.2"
