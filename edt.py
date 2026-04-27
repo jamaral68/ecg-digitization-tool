@@ -133,7 +133,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
     if strategy =='color':
         img_hsv=cv.cvtColor(image, cv.COLOR_BGR2HSV)
         #Filter color to remove the grid
-        #lower=(0,0,0) # black colssor
+        #lower=(0,0,0) # black color
         #upper=(179,255,220) # dark gray
         mask = cv.inRange(img_hsv, lower, upper)
         result = img_hsv.copy()
@@ -170,7 +170,7 @@ def ecg_to_csv(image_name, template_name, csv_name, config_dict):
 
     #foreground is the inverted image ( background = black and the signal is white)
     if dilation != 0:    
-        foreground  = cv.morphologyEx(255-th1,cv.MORPH_DILATE,np.ones((3,3)),iterations=dilation)
+        foreground  = cv.morphologyEx(255-th1,cv.MORPH_DILATE,np.ones((3,3)),iterations=dilation) # to Thick the line
     else:
         foreground = 255-th1
 
