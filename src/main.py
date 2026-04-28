@@ -14,7 +14,7 @@ if __name__ == "__main__":
     pulse_width_mm      = 500
     mmpsec              = 25
     pulse_per_sec       = pulse_width_mm / mmpsec
-    sample_frequency    = 500
+    sample_frequency    = 100
     time_lead           = 2.5
     num_sampling_points = int(time_lead * sample_frequency)
     layout              = (3, 4)

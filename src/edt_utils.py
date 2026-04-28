@@ -63,6 +63,7 @@ def segment_to_df(line_list, pulse_per_sec, pulse_per_mv, num_pts):
     Each column represents one lead's interpolated ECG signal.
     """
     df = pd.DataFrame()
+
     for i, line in enumerate(line_list):
         for seg in line['curves']:
             xsec, ymv = convert_to_secmv(
@@ -70,10 +71,25 @@ def segment_to_df(line_list, pulse_per_sec, pulse_per_mv, num_pts):
                 line['wpulse'], pulse_per_sec, pulse_per_mv
             )
             _, y_new = interpolate_segment(xsec, ymv, num_pts)
+
             col_name = seg['name']
             if col_name in df.columns:
                 col_name = f"{col_name}_{i}"
+
             df[col_name] = y_new
+
+    df.insert(0, "time", np.arange(num_pts) / (num_pts / (pulse_per_sec)))
+
+    lead_order = [
+        'I', 'II', 'III',
+        'aVR', 'aVL', 'aVF',
+        'V1', 'V2', 'V3',
+        'V4', 'V5', 'V6'
+    ]
+
+    ordered_cols = ['time'] + [lead for lead in lead_order if lead in df.columns]
+    df = df[ordered_cols]
+
     return df
  
 def draw_overlay(image_path, result, model):

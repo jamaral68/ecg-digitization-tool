@@ -38,7 +38,7 @@ def ecg_to_csv(setup, model: YOLO, label_model: YOLO = None, save_overlay=True):
     ]
     if pulse_boxes:
         x1, y1, x2, y2 = map(int, pulse_boxes[0].xyxy[0].tolist())
-        pulse_per_mv = (y2 - y1) / 1.0
+        pulse_per_mv = (y2 - y1) 
     else:
         pulse_per_mv = 10.0
  
