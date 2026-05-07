@@ -6,7 +6,78 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy import interpolate
+from scipy.interpolate import CubicSpline
 from scipy.signal import medfilt
+
+
+def _hampel_mask(y: np.ndarray, window: int = 9, n_sigmas: float = 3.0) -> np.ndarray:
+    """Hampel filter: detecta outliers comparando cada ponto à mediana e MAD
+    locais (calculadas dentro da janela), em vez de uma MAD global que seria
+    inflada por aglomerados de spikes."""
+    y = y.astype(float)
+    window = max(3, window | 1)
+    half = window // 2
+    pad = np.pad(y, half, mode="edge")
+    win = np.lib.stride_tricks.sliding_window_view(pad, window)
+    med = np.median(win, axis=1)
+    mad = np.median(np.abs(win - med[:, None]), axis=1)
+    sigma = 1.4826 * mad
+    sigma = np.where(sigma > 0, sigma, np.inf)
+    return np.abs(y - med) > n_sigmas * sigma
+
+
+def extract_yseg_clean(
+    img_lead: np.ndarray,
+    band: int = 15,
+    guide_kernel: int = 14,
+    hampel_window: int = 7,
+    hampel_sigmas: float = 1.5,
+) -> np.ndarray:
+    """Extrai `yseg` mantendo o sinal original onde ele é confiável e
+    eliminando spikes via duas barreiras complementares.
+
+    Etapas:
+      1. `argmin` global só para gerar um guia suavizado por mediana larga
+         (`guide_kernel`). O guia ignora spikes por construção da mediana.
+      2. `argmin` restrito a uma faixa vertical de `±band` em torno do guia
+         para cada coluna — torna fisicamente impossível escolher um pixel
+         escuro distante do traço (texto/grade residual).
+      3. Hampel local sobre o `yseg` resultante para capturar resíduos finos
+         que sobreviveram dentro da banda.
+      4. CubicSpline preenche apenas os índices marcados, respeitando a
+         posição real dos pontos válidos. Os demais ficam exatamente como o
+         `argmin` original devolveu.
+
+    Parâmetros:
+      band: meia-altura (px) da faixa de busca em torno do guia. Maior que a
+        amplitude esperada do sinal, menor que a distância típica até spikes.
+      guide_kernel: janela da mediana que produz o guia. Bem maior que o
+        spike mais largo; pode achatar QRS sem prejuízo (só serve de âncora).
+      hampel_window / hampel_sigmas: sensibilidade do segundo passo.
+    """
+    if img_lead.ndim != 2:
+        img_lead = cv.cvtColor(img_lead, cv.COLOR_BGR2GRAY)
+    h, w = img_lead.shape
+
+    y_raw = np.argmin(img_lead, axis=0).astype(float)
+
+    guide_kernel = max(3, guide_kernel | 1)
+    y_guide = medfilt(y_raw, kernel_size=guide_kernel)
+
+    yseg = np.empty(w, dtype=float)
+    for x in range(w):
+        c = int(np.clip(y_guide[x], 0, h - 1))
+        lo = max(0, c - band)
+        hi = min(h, c + band + 1)
+        yseg[x] = lo + int(np.argmin(img_lead[lo:hi, x]))
+
+    mask = _hampel_mask(yseg, window=hampel_window, n_sigmas=hampel_sigmas)
+    if mask.any() and (~mask).sum() >= 4:
+        xs = np.arange(w)
+        cs = CubicSpline(xs[~mask], yseg[~mask])
+        yseg[mask] = cs(xs[mask])
+
+    return yseg
 
 
 def extract_curve_robust(
@@ -96,14 +167,13 @@ def convert_to_secmv(xs, ys, wp, pulse_per_sec, pulse_per_mv):
 
 
 def interpolate_segment(x, y, num):
-    """
-    Interpolate an ECG segment to a fixed number of points using cubic spline.
-    """
-    x_interp = np.linspace(0, 1, len(x))
-    f = interpolate.CubicSpline(x_interp, y)
-    x_new = np.linspace(0, 1, num)
-    y_new = f(x_new)
-    return x_new, y_new
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    x_norm = (x - x.min()) / (x.max() - x.min())                              
+    f = interpolate.CubicSpline(x_norm, y)
+    x_new = np.linspace(0, 1, num)                                            
+    return x_new, f(x_new)
+
 
 
 def segment_to_df(ecg_curves, pulse_per_sec, pulse_per_mv, num_pts):
@@ -117,7 +187,6 @@ def segment_to_df(ecg_curves, pulse_per_sec, pulse_per_mv, num_pts):
             curve["xseg"], curve["yseg"], curve["wpulse"], pulse_per_sec, pulse_per_mv
         )
         x_new, y_new = interpolate_segment(xsec, ymv, num_pts)
-        print(len(xsec), len(y_new))
         dfs.append(pd.Series(y_new, name=lead_name, index=x_new))
     return pd.concat(dfs,axis=1)
 

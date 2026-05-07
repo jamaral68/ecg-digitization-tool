@@ -10,10 +10,24 @@ from ecg_digitizer.utils import (
     draw_overlay_from_curves,
     line_list_to_curves_df,
     extract_curve_robust,
+    extract_yseg_clean,
 )
 from ecg_scanner.scanner import ECGScanner
 
-
+LEAD_ORDER = [
+    "I",
+    "aVR",
+    "V1",
+    "V4",
+    "II",
+    "aVL",
+    "V2",
+    "V5",
+    "III",
+    "aVF",
+    "V3",
+    "V6",
+]
 
 def get_image_boxes(result, yolo_model):
     boxes = dict()
@@ -49,11 +63,31 @@ def get_label_boxes(label_model, config):
         label_boxes.append((lx1, ly1, lx2, ly2))
     return label_boxes
 
-def crop_image_boxes(img, boxes, label_boxes):
+def crop_image_boxes(
+    img,
+    boxes,
+    label_boxes,
+    binarize_method="adaptive",
+    block_size=50,
+    block_threshold=25,
+    pre_median_k=3,
+    pre_gaussian_k=3,
+    post_median_k=5,
+):
     scanner = ECGScanner(
         v_margin=90, s_margin=60, fill_value=255, dark_percentile=10, s_quantile_offset=0.4
     )
-    return scanner.scan_yolo(image=img, lead_boxes=boxes, label_boxes=label_boxes)
+    return scanner.scan_yolo(
+        image=img,
+        lead_boxes=boxes,
+        label_boxes=label_boxes,
+        binarize_method=binarize_method,
+        block_size=block_size,
+        block_threshold=block_threshold,
+        pre_median_k=pre_median_k,
+        pre_gaussian_k=pre_gaussian_k,
+        post_median_k=post_median_k,
+    )
 
 
 def ecg_to_csv(
@@ -61,6 +95,12 @@ def ecg_to_csv(
     model: YOLO,
     label_model: YOLO | None = None,
     save_overlay: bool = True,
+    binarize_method: str = "adaptive",
+    block_size: int = 50,
+    block_threshold: int = 25,
+    pre_median_k: int = 3,
+    pre_gaussian_k: int = 3,
+    post_median_k: int = 5,
 ):
     """
     Extract ECG signals from an image and return a DataFrame.
@@ -73,30 +113,40 @@ def ecg_to_csv(
 
     label_boxes = get_label_boxes(label_model, config)
 
-    boxes = crop_image_boxes(img.copy(), boxes=boxes, label_boxes=label_boxes)
+    boxes = crop_image_boxes(
+        img.copy(),
+        boxes=boxes,
+        label_boxes=label_boxes,
+        binarize_method=binarize_method,
+        block_size=block_size,
+        block_threshold=block_threshold,
+        pre_median_k=pre_median_k,
+        pre_gaussian_k=pre_gaussian_k,
+        post_median_k=post_median_k,
+    )
     _ = boxes.pop("pulse")
     ecg_curves = dict()
     for lead_name, img_lead in boxes.items():
         height, width = img_lead.shape
-        #yseg = extract_curve_robust(img_lead)
-        yseg = np.argmin(img_lead,axis=0)
+        yseg = extract_yseg_clean(img_lead)
         ecg_curves[lead_name] = {
                 "wpulse": width,
                 "hpulse": height,
                 "xseg": np.arange(width),
-                "yseg": yseg,
+                "yseg": yseg,#np.argmin(img_lead,axis=0),
+                "yseg_original":np.argmin(img_lead,axis=0),
                 "wseg": width,
                 "rec":boxes[lead_name]
             }
-    #if save_overlay:
-    #    overlay_img = draw_overlay_from_curves(config.image, line_list_to_curves_df(line_list), )
-    #    for lx1, ly1, lx2, ly2 in label_boxes:
-    #        cv.rectangle(overlay_img, (lx1, ly1), (lx2, ly2), (0, 0, 255), 2)
-
-        #overlay_path = config.csv_name.replace(".csv", "_overlay.png")
-        #cv.imwrite(overlay_path, overlay_img)
-
+    lead_order_lower = [l.lower() for l in LEAD_ORDER]
+    ordered_curves = {
+        lead_lower: ecg_curves[lead_lower]
+        for lead_lower in lead_order_lower
+        if lead_lower in ecg_curves
+    }
+    ordered_curves.update({k: v for k, v in ecg_curves.items() if k not in lead_order_lower})
+    
     df = segment_to_df(
-        ecg_curves, config.pulse_per_sec, pulse_per_mv, config.num_sampling_points
+        ordered_curves, config.pulse_per_sec, pulse_per_mv, config.num_sampling_points
     )
     return df

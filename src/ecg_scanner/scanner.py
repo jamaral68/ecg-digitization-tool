@@ -43,10 +43,18 @@ class ECGScannerConfig:
     hsv_saturation_multiplier: float = 1.5
     hsv_brightness_multiplier: float = 1.2
 
+
 class ECGScanner(object):
     """An ECG Image Scanner"""
 
-    def __init__(self,v_margin=60, s_margin=90, fill_value=255, dark_percentile=10, s_quantile_offset=0.4):
+    def __init__(
+        self,
+        v_margin=60,
+        s_margin=90,
+        fill_value=255,
+        dark_percentile=10,
+        s_quantile_offset=0.4,
+    ):
         """
         Args:
             interactive (boolean): If True, user can adjust screen contour before
@@ -57,7 +65,7 @@ class ECGScanner(object):
             MAX_QUAD_ANGLE_RANGE (int):  A contour will also be rejected if the range
                 of its interior angles exceeds MAX_QUAD_ANGLE_RANGE. Defaults to 40.
         """
-        
+
         self.v_margin = v_margin
         self.s_margin = s_margin
         self.fill_value = fill_value
@@ -133,7 +141,27 @@ class ECGScanner(object):
 
         # return the warped image
         return warped
-    
+
+    @staticmethod
+    def _inpaint_labels(
+        image: np.ndarray,
+        label_boxes: list[tuple[int, int, int, int]],
+        dilate_px: int = 3,
+        inpaint_radius: int = 3,
+    ) -> np.ndarray:
+        """Aplica cv2.inpaint sobre as regiões de texto detectadas pelo YOLO de labels."""
+        h, w = image.shape[:2]
+        mask = np.zeros((h, w), dtype=np.uint8)
+        for lx1, ly1, lx2, ly2 in label_boxes:
+            x1 = max(0, lx1 - dilate_px)
+            y1 = max(0, ly1 - dilate_px)
+            x2 = min(w, lx2 + dilate_px)
+            y2 = min(h, ly2 + dilate_px)
+            mask[y1:y2, x1:x2] = 255
+        return cv2.inpaint(image, mask, inpaint_radius, cv2.INPAINT_TELEA)
+
+
+
     @staticmethod
     def detect_signal_profile(img_bgr, dark_percentile=10, s_quantile_offset=0.4):
         """Detecta o perfil HSV do traçado do ECG.
@@ -156,7 +184,10 @@ class ECGScanner(object):
             "s_max": float(np.quantile(dark[:, 1], 0.5 + s_quantile_offset)),
         }
 
-    def keep_signal_color(self, img_bgr, ):
+    def keep_signal_color(
+        self,
+        img_bgr,
+    ):
         """Mantém apenas pixels com perfil do traçado; o resto vira branco.
 
         Define a cor do sinal como (V baixo, S baixo) e aceita pixels com
@@ -166,7 +197,11 @@ class ECGScanner(object):
         if img_bgr.ndim == 2:
             return img_bgr.copy(), None, None
 
-        profile = self.detect_signal_profile(img_bgr, dark_percentile=self.dark_percentile, s_quantile_offset=self.s_quantile_offset)
+        profile = self.detect_signal_profile(
+            img_bgr,
+            dark_percentile=self.dark_percentile,
+            s_quantile_offset=self.s_quantile_offset,
+        )
         if profile is None:
             return img_bgr.copy(), None, None
 
@@ -180,51 +215,107 @@ class ECGScanner(object):
         return cleaned
 
 
+
     @staticmethod
-    def _inpaint_labels(
-        image: np.ndarray,
-        label_boxes: list[tuple[int, int, int, int]],
-        dilate_px: int = 3,
-        inpaint_radius: int = 3,
+    def _block_median_binarize(
+        gray: np.ndarray,
+        block_size: int = 50,
+        threshold: int = 25,
+        pre_median_k: int = 3,
+        pre_gaussian_k: int = 3,
+        post_median_k: int = 5,
     ) -> np.ndarray:
-        """Aplica cv2.inpaint sobre as regiões de texto detectadas pelo YOLO de labels."""
-        h, w = image.shape[:2]
-        mask = np.zeros((h, w), dtype=np.uint8)
-        for lx1, ly1, lx2, ly2 in label_boxes:
-            x1 = max(0, lx1 - dilate_px)
-            y1 = max(0, ly1 - dilate_px)
-            x2 = min(w, lx2 + dilate_px)
-            y2 = min(h, ly2 + dilate_px)
-            mask[y1:y2, x1:x2] = 255
-        return cv2.inpaint(image, mask, inpaint_radius, cv2.INPAINT_TELEA)
+        """Binariza um crop via threshold adaptativo por blocos sobre a mediana local.
+
+        Parâmetros calibráveis:
+          block_size    — tamanho do bloco em pixels; blocos menores adaptam melhor
+                          a variações locais de iluminação, mas são mais lentos.
+          threshold     — diferença máxima entre pixel e mediana do bloco para ser
+                          considerado sinal; reduzir = mais seletivo (menos ruído),
+                          aumentar = mais permissivo (recupera traços tênues).
+          pre_median_k  — kernel do medianBlur antes de inverter; remove salt-and-
+                          pepper sem borrar bordas. Deve ser ímpar >= 1.
+          pre_gaussian_k— kernel do GaussianBlur antes de inverter; suaviza
+                          gradientes de iluminação. Deve ser ímpar >= 1.
+          post_median_k — kernel do medianBlur na saída; elimina pontos isolados
+                          no binarizado. Deve ser ímpar >= 1.
+        """
+        def _get_block_index(shape, yx, bs):
+            y = np.arange(max(0, yx[0] - bs), min(shape[0], yx[0] + bs))
+            x = np.arange(max(0, yx[1] - bs), min(shape[1], yx[1] + bs))
+            return tuple(np.meshgrid(y, x))
+
+        def _adaptive_median_threshold(block):
+            med = np.median(block)
+            out = np.zeros_like(block)
+            out[block - med < threshold] = 255
+            return out
+
+        img = gray.copy()
+        if pre_median_k > 1:
+            img = cv2.medianBlur(img, pre_median_k | 1)
+        if pre_gaussian_k > 1:
+            k = pre_gaussian_k | 1
+            img = cv2.GaussianBlur(img, (k, k), 0)
+        img = 255 - img
+
+        out = np.zeros_like(img)
+        for row in range(0, img.shape[0], block_size):
+            for col in range(0, img.shape[1], block_size):
+                idx = _get_block_index(img.shape, (row, col), block_size)
+                out[idx] = _adaptive_median_threshold(img[idx])
+
+        if post_median_k > 1:
+            out = cv2.medianBlur(out, post_median_k | 1)
+        return out
+
 
     def scan_yolo(
         self,
         image: np.ndarray,
         lead_boxes: dict[str, tuple[int, int, int, int]],
         label_boxes: list[tuple[int, int, int, int]] | None = None,
+        binarize_method: str = "adaptive",
+        block_size: int = 50,
+        block_threshold: int = 25,
+        pre_median_k: int = 3,
+        pre_gaussian_k: int = 3,
+        post_median_k: int = 5,
     ) -> dict[str, np.ndarray]:
+        """
+        binarize_method:
+          "adaptive"     — adaptiveThreshold Gaussian (padrão)
+          "block_median" — threshold adaptativo por blocos sobre a mediana local
+          "morph_lines"  — remoção de grade via morfologia antes de binarizar
+        """
         orig = self.keep_signal_color(image.copy())
         if label_boxes:
             orig = self._inpaint_labels(orig, label_boxes)
         image_boxes: dict[str, np.ndarray] = dict()
         for lead_name, screenCnt in lead_boxes.items():
-            # apply the perspective transformation
+            if lead_name in image_boxes:
+                continue
             warped = self.four_point_transform(orig, screenCnt)
-            # convert the warped image to grayscale
             gray = cv2.cvtColor(warped, cv2.COLOR_BGR2GRAY)
-            # sharpen image
 
-            sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
-            sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
-
-            # apply adaptive threshold to get black and white effect
-            image_boxes[lead_name] = cv2.adaptiveThreshold(
-                gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
-            )
+            if binarize_method == "block_median":
+                image_boxes[lead_name] = self._block_median_binarize(
+                    gray,
+                    block_size=block_size,
+                    threshold=block_threshold,
+                    pre_median_k=pre_median_k,
+                    pre_gaussian_k=pre_gaussian_k,
+                    post_median_k=post_median_k,
+                )
+            elif binarize_method == "morph_lines":
+                image_boxes[lead_name] = self._morph_lines_binarize(gray)
+            else:
+                sharpen = cv2.GaussianBlur(gray, (0, 0), 3)
+                sharpen = cv2.addWeighted(gray, 1.5, sharpen, -0.5, 0)
+                image_boxes[lead_name] = cv2.adaptiveThreshold(
+                    gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 15
+                )
         return image_boxes
-    
-    
 
 
 class PolygonInteractor(object):

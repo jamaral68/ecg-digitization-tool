@@ -79,10 +79,27 @@ if uploaded_file is not None:
             num_sampling_points=num_sampling_points,
         )
 
-        df = ecg_to_csv(config, model, label_model=label_model, save_overlay=True)
+        df, lead_crops = ecg_to_csv(config, model, label_model=label_model, save_overlay=True)
 
         if df is not None and not df.empty:
             st.success("Processing completed!")
+
+            if lead_crops:
+                st.subheader("Lead crops")
+                n_cols_crops = 3
+                n_rows_crops = (len(lead_crops) + n_cols_crops - 1) // n_cols_crops
+                fig_crops, ax_crops = plt.subplots(
+                    nrows=n_rows_crops, ncols=n_cols_crops, figsize=(14, 3 * n_rows_crops)
+                )
+                ax_crops = np.atleast_1d(ax_crops).flatten()
+                for i, (lead_name, img_lead) in enumerate(lead_crops.items()):
+                    ax_crops[i].imshow(img_lead, cmap="gray")
+                    ax_crops[i].set_title(f"Lead: {lead_name}", fontsize=13)
+                    ax_crops[i].axis("off")
+                for j in range(len(lead_crops), len(ax_crops)):
+                    fig_crops.delaxes(ax_crops[j])
+                fig_crops.tight_layout()
+                st.pyplot(fig_crops)
 
             # Casa o lead_order (uppercase) com as colunas reais do df
             # (digitizer.py emite lead_name.lower()).
